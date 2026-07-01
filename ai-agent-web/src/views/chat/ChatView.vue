@@ -223,6 +223,9 @@ const sendMessage = async () => {
     currentSessionId.value,
     content,
     DEFAULT_AGENT_ID,
+    (messageId) => {
+      aiMsg.messageId = messageId
+    },
     (chunk) => {
       aiMsg.content += chunk
       nextTick(scrollToBottom)

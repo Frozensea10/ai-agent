@@ -25,6 +25,7 @@ export function streamChat(
   sessionId: string,
   content: string,
   agentId: number,
+  onStart: (messageId: string) => void,
   onChunk: (chunk: string) => void,
   onDone: () => void,
   onError: (error: string) => void
@@ -42,7 +43,14 @@ export function streamChat(
   })
     .then(async (response) => {
       if (!response.ok || !response.body) {
-        onError(`请求失败: ${response.status}`)
+        let message = `请求失败: ${response.status}`
+        try {
+          const body = await response.json()
+          if (body?.message) message = body.message
+        } catch {
+          // ignore
+        }
+        onError(message)
         return
       }
 
@@ -66,7 +74,9 @@ export function streamChat(
 
           try {
             const parsed = JSON.parse(data)
-            if (parsed.type === 'content' && parsed.delta) {
+            if (parsed.type === 'start' && parsed.messageId) {
+              onStart(parsed.messageId)
+            } else if (parsed.type === 'content' && parsed.delta) {
               onChunk(parsed.delta)
             } else if (parsed.type === 'error') {
               onError(parsed.delta || '流式响应错误')
