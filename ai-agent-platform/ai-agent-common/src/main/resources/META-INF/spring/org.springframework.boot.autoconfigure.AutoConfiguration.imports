@@ -1,1 +1,2 @@
 com.agent.common.config.MybatisPlusConfig
+com.agent.common.config.WebMvcConfig

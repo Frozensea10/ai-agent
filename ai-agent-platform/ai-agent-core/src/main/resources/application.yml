@@ -23,6 +23,12 @@ spring:
 
 server:
   port: 8082
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-response: true
 
 mybatis-plus:
   configuration:
@@ -37,3 +43,9 @@ mybatis-plus:
 
 jwt:
   secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
+
+logging:
+  file:
+    name: D:/Workspace/ai-agent/logs/core.log
+  level:
+    com.agent: debug

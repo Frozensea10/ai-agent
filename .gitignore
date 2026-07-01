@@ -48,3 +48,19 @@ application-dev-local.yml
 # Temporary files
 *.tmp
 *.temp
+
+# Screenshots and generated data
+chat.png
+agent.png
+*_response.json
+register.json
+login.json
+refresh.json
+create_session.json
+session_response.json
+messages.json
+agent_list.json
+
+# Browser automation artifacts
+.stream/
+browser-data/

@@ -17,6 +17,12 @@ spring:
 
 server:
   port: 8085
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-response: true
 
 minio:
   endpoint: http://localhost:9000
