@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: ai-agent-user-test
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+      data-locations: classpath:db/data.sql
+
+jwt:
+  secret: TestSecretKeyForAiAgentPlatform2026!@#$
+  access-token-expire: 86400000
+  refresh-token-expire: 604800000
+
+logging:
+  level:
+    root: info
+    com.agent.user: debug

@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: ai-agent-common-test
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+
+jwt:
+  secret: TestSecretKeyForAiAgentPlatform2026!@#$
+  access-token-expire: 86400000
+  refresh-token-expire: 604800000
+
+logging:
+  level:
+    root: info

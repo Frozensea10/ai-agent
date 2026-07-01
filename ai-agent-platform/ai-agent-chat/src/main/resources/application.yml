@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: ai-agent-chat
+  main:
+    allow-bean-definition-overriding: true
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        import-check:
+          enabled: false
+  datasource:
+    url: jdbc:mysql://localhost:3306/ai_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ai_agent
+    password: ai_agent123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+
+server:
+  port: 8083
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: auto
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+jwt:
+  secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
+
+langchain4j:
+  http:
+    clientBuilderFactory: dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory
+
+logging:
+  level:
+    com.agent.chat: debug
