@@ -31,6 +31,11 @@ public class OpenAiAdapter implements ModelAdapter {
     }
 
     @Override
+    public boolean isConfigured() {
+        return apiKey != null && !apiKey.isBlank();
+    }
+
+    @Override
     public ChatModel createChatModel(String modelName, Double temperature, Integer maxTokens) {
         return OpenAiChatModel.builder()
                 .apiKey(apiKey)

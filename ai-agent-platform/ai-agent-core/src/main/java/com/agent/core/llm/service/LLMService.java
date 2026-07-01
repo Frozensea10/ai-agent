@@ -45,8 +45,14 @@ public class LLMService implements ApplicationRunner {
         log.info("LLM 模型可用性检测开始...");
         for (Map.Entry<String, ModelAdapter> entry : modelAdapterMap.entrySet()) {
             String provider = entry.getKey();
+            ModelAdapter adapter = entry.getValue();
+            if (!adapter.isConfigured()) {
+                providerAvailability.put(provider, false);
+                log.warn("⚠️ 模型提供商 [{}] API key 未配置，跳过网络可用性检测", provider);
+                continue;
+            }
             try {
-                ChatModel testModel = entry.getValue().createChatModel(null, HEALTH_CHECK_TEMPERATURE, HEALTH_CHECK_MAX_TOKENS);
+                ChatModel testModel = adapter.createChatModel(null, HEALTH_CHECK_TEMPERATURE, HEALTH_CHECK_MAX_TOKENS);
                 String response = testModel.chat("Hello");
                 providerAvailability.put(provider, true);
                 log.info("✅ 模型提供商 [{}] 可用", provider);
@@ -59,6 +65,7 @@ public class LLMService implements ApplicationRunner {
     }
 
     public ChatModel createChatModel(String provider, String modelName, Double temperature, Integer maxTokens) {
+        validateProvider(provider);
         String cacheKey = buildCacheKey(provider, modelName, temperature, maxTokens);
         return chatModelCache.computeIfAbsent(cacheKey, k -> {
             ModelAdapter adapter = getAdapter(provider);
@@ -67,11 +74,19 @@ public class LLMService implements ApplicationRunner {
     }
 
     public StreamingChatModel createStreamingModel(String provider, String modelName, Double temperature, Integer maxTokens) {
+        validateProvider(provider);
         String cacheKey = buildCacheKey(provider, modelName, temperature, maxTokens);
         return streamingModelCache.computeIfAbsent(cacheKey, k -> {
             ModelAdapter adapter = getAdapter(provider);
             return adapter.createStreamingModel(modelName, temperature, maxTokens);
         });
+    }
+
+    private void validateProvider(String provider) {
+        if (!isProviderAvailable(provider)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(),
+                    "模型提供商 [" + provider + "] 未配置或不可用，请检查 llm.xxx.api-key 配置");
+        }
     }
 
     private String buildCacheKey(String provider, String modelName, Double temperature, Integer maxTokens) {

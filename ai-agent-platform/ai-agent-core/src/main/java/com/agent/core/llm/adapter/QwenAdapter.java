@@ -24,6 +24,11 @@ public class QwenAdapter implements ModelAdapter {
     }
 
     @Override
+    public boolean isConfigured() {
+        return apiKey != null && !apiKey.isBlank();
+    }
+
+    @Override
     public ChatModel createChatModel(String modelName, Double temperature, Integer maxTokens) {
         return QwenChatModel.builder()
                 .apiKey(apiKey)

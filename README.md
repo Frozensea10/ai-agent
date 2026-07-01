@@ -6,11 +6,27 @@
 - Node.js 18+
 - Docker & Docker Compose
 - Maven 3.9+
-- （可选）OpenAI / DeepSeek / 通义千问 API Key，用于大模型对话
+- （必填）至少一个 LLM API Key：OpenAI / DeepSeek / 通义千问 / Anthropic
 
 ## 快速启动
 
-### 1. 启动基础设施服务
+### 1. 配置环境变量
+
+复制示例文件并填写至少一个 LLM API Key：
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell 中加载环境变量：
+
+```powershell
+Get-Content .env | ForEach-Object { if ($_ -match '^([^#][^=]*)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') } }
+```
+
+> 注意：`.env` 文件已加入 `.gitignore`，不会提交到仓库。生产环境请务必修改 `JWT_SECRET`。
+
+### 2. 启动基础设施服务
 
 ```bash
 docker-compose up -d
@@ -27,24 +43,24 @@ docker-compose up -d
 | Nacos | 8848/9848 | 服务注册与配置中心 |
 | RabbitMQ | 5672/15672 | 消息队列 |
 
-### 2. 服务访问地址
+### 3. 服务访问地址
 
 - Nacos 控制台: http://localhost:8848/nacos (默认账号密码: nacos/nacos)
 - MinIO 控制台: http://localhost:9001 (账号: minio / 密码: minio123)
 - RabbitMQ 管理界面: http://localhost:15672 (账号: admin / 密码: admin123)
 - Qdrant API: http://localhost:6333
 
-### 3. 数据库初始化
+### 4. 数据库初始化
 
-MySQL 初始化时会自动创建 `ai_agent` 数据库和必要的表。首次启动 Nacos 前，需要手动创建 nacos 数据库：
+`init-scripts/01-init-databases.sql` 会在 MySQL 首次启动时自动执行，创建 `ai_agent` 和 `nacos` 数据库并插入默认角色、权限和示例 Agent。如果修改了初始化脚本，需要清除数据卷后重新启动：
 
 ```bash
-docker exec -it ai-agent-mysql mysql -uroot -proot123 -e "CREATE DATABASE IF NOT EXISTS nacos CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+docker-compose down -v && docker-compose up -d
 ```
 
-### 4. 启动后端服务
+### 5. 启动后端服务
 
-在 `ai-agent-platform` 目录下，逐个启动微服务：
+在 `ai-agent-platform` 目录下，逐个启动微服务（确保第 1 步的环境变量已加载）：
 
 ```bash
 cd ai-agent-platform
@@ -74,7 +90,7 @@ $cmds = @(
 foreach ($cmd in $cmds) { Start-Process powershell -ArgumentList "-NoExit", "-Command", $cmd }
 ```
 
-### 5. 启动前端
+### 6. 启动前端
 
 ```bash
 cd ai-agent-web
@@ -84,7 +100,7 @@ npm run dev
 
 前端默认运行在 http://localhost:3000，通过 Vite 代理访问后端网关 http://localhost:8080。
 
-### 6. 演示账号
+### 7. 演示账号
 
 系统初始化时会插入默认角色和权限。首次使用请注册账号，或调用接口注册测试账号：
 
@@ -94,7 +110,7 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
   -d '{"username":"test","password":"Test123456","email":"test@example.com"}'
 ```
 
-### 7. 停止服务
+### 8. 停止服务
 
 ```bash
 docker-compose down
@@ -120,6 +136,6 @@ docker-compose down -v
 
 ## 注意事项
 
-- 大模型对话需要在 `ai-agent-core/src/main/resources/application.yml` 中配置对应提供商的 API Key。
-- 如果修改了数据库初始化脚本，需要删除 Docker 数据卷后重新启动：`docker-compose down -v && docker-compose up -d`。
+- 大模型对话必须配置至少一个 LLM API Key，否则聊天接口会返回“模型提供商未配置”的友好提示。
+- 如果本地已有 MySQL 服务占用 3306 端口，请先停止该服务，否则后端会连接错误的数据库实例。
 - 前端代码变更会自动热更新；后端代码变更需要重启对应服务。

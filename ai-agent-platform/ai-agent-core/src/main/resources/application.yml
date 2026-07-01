@@ -44,6 +44,16 @@ mybatis-plus:
 jwt:
   secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
 
+llm:
+  openai:
+    api-key: ${LLM_OPENAI_API_KEY:}
+  deepseek:
+    api-key: ${LLM_DEEPSEEK_API_KEY:}
+  qwen:
+    api-key: ${LLM_QWEN_API_KEY:}
+  anthropic:
+    api-key: ${LLM_ANTHROPIC_API_KEY:}
+
 logging:
   file:
     name: D:/Workspace/ai-agent/logs/core.log

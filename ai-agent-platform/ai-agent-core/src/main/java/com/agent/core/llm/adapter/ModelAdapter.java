@@ -10,4 +10,8 @@ public interface ModelAdapter {
     ChatModel createChatModel(String modelName, Double temperature, Integer maxTokens);
 
     StreamingChatModel createStreamingModel(String modelName, Double temperature, Integer maxTokens);
+
+    default boolean isConfigured() {
+        return true;
+    }
 }
