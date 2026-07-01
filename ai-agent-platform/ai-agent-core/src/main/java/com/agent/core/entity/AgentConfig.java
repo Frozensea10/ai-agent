@@ -56,6 +56,8 @@ public class AgentConfig {
 
     private Long createdBy;
 
+    private Long updatedBy;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

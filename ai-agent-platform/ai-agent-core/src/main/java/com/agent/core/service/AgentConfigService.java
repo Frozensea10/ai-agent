@@ -58,16 +58,20 @@ public class AgentConfigService {
         config.setPriority(request.getPriority() != null ? request.getPriority() : DEFAULT_PRIORITY);
         config.setStatus(ACTIVE_STATUS);
         config.setCreatedBy(userId);
+        config.setUpdatedBy(userId);
 
         agentConfigMapper.insert(config);
         return convertToVO(config);
     }
 
     @CacheEvict(value = CACHE_NAME, key = CACHE_KEY_PREFIX + " + #result.agentCode")
-    public AgentVO updateAgent(Long id, UpdateAgentRequest request) {
+    public AgentVO updateAgent(Long id, UpdateAgentRequest request, Long userId) {
         AgentConfig config = agentConfigMapper.selectById(id);
         if (config == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "Agent 不存在");
+        }
+        if (!config.getCreatedBy().equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "权限不足");
         }
 
         if (request.getAgentName() != null) config.setAgentName(request.getAgentName());
@@ -84,32 +88,43 @@ public class AgentConfigService {
         if (request.getCapabilities() != null) config.setCapabilities(request.getCapabilities());
         if (request.getPriority() != null) config.setPriority(request.getPriority());
         if (request.getStatus() != null) config.setStatus(request.getStatus());
+        config.setUpdatedBy(userId);
 
         agentConfigMapper.updateById(config);
         return convertToVO(config);
     }
 
     @CacheEvict(value = CACHE_NAME, allEntries = true)
-    public void deleteAgent(Long id) {
+    public void deleteAgent(Long id, Long userId) {
         AgentConfig config = agentConfigMapper.selectById(id);
         if (config == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "Agent 不存在");
+        }
+        if (!config.getCreatedBy().equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "权限不足");
         }
         agentConfigMapper.deleteById(id);
     }
 
     @Cacheable(value = CACHE_NAME, key = CACHE_KEY_PREFIX + " + #id")
-    public AgentVO getAgentById(Long id) {
+    public AgentVO getAgentById(Long id, Long userId) {
         AgentConfig config = agentConfigMapper.selectById(id);
         if (config == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "Agent 不存在");
         }
+        if (!config.getCreatedBy().equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "权限不足");
+        }
         return convertToVO(config);
     }
 
-    @Cacheable(value = CACHE_NAME, key = CACHE_KEY_LIST)
-    public List<AgentVO> listAgents() {
-        return agentConfigMapper.selectAllActive().stream()
+    @Cacheable(value = CACHE_NAME, key = CACHE_KEY_LIST + " + #userId")
+    public List<AgentVO> listAgents(Long userId) {
+        LambdaQueryWrapper<AgentConfig> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AgentConfig::getCreatedBy, userId)
+                .eq(AgentConfig::getDeleted, 0)
+                .orderByDesc(AgentConfig::getCreatedAt);
+        return agentConfigMapper.selectList(wrapper).stream()
                 .map(this::convertToVO)
                 .collect(Collectors.toList());
     }

@@ -7,6 +7,7 @@ import com.agent.core.dto.UpdateAgentRequest;
 import com.agent.core.entity.AgentConfig;
 import com.agent.core.mapper.AgentConfigMapper;
 import com.agent.core.vo.AgentVO;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -91,6 +92,7 @@ class AgentConfigServiceTest {
         existing.setTemperature(0.5);
         existing.setMaxTokens(1024);
         existing.setStatus(1);
+        existing.setCreatedBy(1L);
 
         when(agentConfigMapper.selectById(1L)).thenReturn(existing);
         when(agentConfigMapper.updateById(existing)).thenReturn(1);
@@ -98,7 +100,7 @@ class AgentConfigServiceTest {
         UpdateAgentRequest request = new UpdateAgentRequest();
         request.setAgentName("新名称");
 
-        AgentVO vo = agentConfigService.updateAgent(1L, request);
+        AgentVO vo = agentConfigService.updateAgent(1L, request, 1L);
 
         assertEquals("新名称", vo.getAgentName());
         assertEquals("旧描述", vo.getDescription());
@@ -112,8 +114,23 @@ class AgentConfigServiceTest {
         when(agentConfigMapper.selectById(1L)).thenReturn(null);
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> agentConfigService.updateAgent(1L, new UpdateAgentRequest()));
+                () -> agentConfigService.updateAgent(1L, new UpdateAgentRequest(), 1L));
         assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
+    }
+
+    @Test
+    @DisplayName("更新非本人 Agent 抛出 FORBIDDEN")
+    void shouldThrowWhenUpdateAgentNotOwner() {
+        AgentConfig existing = new AgentConfig();
+        existing.setId(1L);
+        existing.setCreatedBy(2L);
+
+        when(agentConfigMapper.selectById(1L)).thenReturn(existing);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> agentConfigService.updateAgent(1L, new UpdateAgentRequest(), 1L));
+        assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
+        verify(agentConfigMapper, never()).updateById(ArgumentMatchers.<AgentConfig>any());
     }
 
     @Test
@@ -124,10 +141,11 @@ class AgentConfigServiceTest {
         config.setAgentName("测试助手");
         config.setAgentCode("test-assistant");
         config.setStatus(1);
+        config.setCreatedBy(1L);
 
         when(agentConfigMapper.selectById(1L)).thenReturn(config);
 
-        AgentVO vo = agentConfigService.getAgentById(1L);
+        AgentVO vo = agentConfigService.getAgentById(1L, 1L);
 
         assertEquals("测试助手", vo.getAgentName());
         assertEquals("test-assistant", vo.getAgentCode());
@@ -139,28 +157,45 @@ class AgentConfigServiceTest {
         when(agentConfigMapper.selectById(1L)).thenReturn(null);
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> agentConfigService.getAgentById(1L));
+                () -> agentConfigService.getAgentById(1L, 1L));
         assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
     }
 
     @Test
-    @DisplayName("查询所有生效 Agent 列表")
+    @DisplayName("查询非本人 Agent 抛出 FORBIDDEN")
+    void shouldThrowWhenGetAgentNotOwner() {
+        AgentConfig config = new AgentConfig();
+        config.setId(1L);
+        config.setCreatedBy(2L);
+
+        when(agentConfigMapper.selectById(1L)).thenReturn(config);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> agentConfigService.getAgentById(1L, 1L));
+        assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
+    }
+
+    @Test
+    @DisplayName("查询当前用户生效 Agent 列表")
     void shouldListActiveAgents() {
         AgentConfig config1 = new AgentConfig();
         config1.setId(1L);
         config1.setAgentName("Agent1");
         config1.setAgentCode("agent-1");
         config1.setStatus(1);
+        config1.setCreatedBy(1L);
 
         AgentConfig config2 = new AgentConfig();
         config2.setId(2L);
         config2.setAgentName("Agent2");
         config2.setAgentCode("agent-2");
         config2.setStatus(1);
+        config2.setCreatedBy(1L);
 
-        when(agentConfigMapper.selectAllActive()).thenReturn(List.of(config1, config2));
+        when(agentConfigMapper.selectList(ArgumentMatchers.<LambdaQueryWrapper<AgentConfig>>any()))
+                .thenReturn(List.of(config1, config2));
 
-        List<AgentVO> result = agentConfigService.listAgents();
+        List<AgentVO> result = agentConfigService.listAgents(1L);
 
         assertEquals(2, result.size());
         assertEquals("Agent1", result.get(0).getAgentName());
@@ -172,10 +207,25 @@ class AgentConfigServiceTest {
     void shouldDeleteAgent() {
         AgentConfig config = new AgentConfig();
         config.setId(1L);
+        config.setCreatedBy(1L);
         when(agentConfigMapper.selectById(1L)).thenReturn(config);
 
-        agentConfigService.deleteAgent(1L);
+        agentConfigService.deleteAgent(1L, 1L);
 
         verify(agentConfigMapper).deleteById(1L);
+    }
+
+    @Test
+    @DisplayName("删除非本人 Agent 抛出 FORBIDDEN")
+    void shouldThrowWhenDeleteAgentNotOwner() {
+        AgentConfig config = new AgentConfig();
+        config.setId(1L);
+        config.setCreatedBy(2L);
+        when(agentConfigMapper.selectById(1L)).thenReturn(config);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> agentConfigService.deleteAgent(1L, 1L));
+        assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
+        verify(agentConfigMapper, never()).deleteById(1L);
     }
 }

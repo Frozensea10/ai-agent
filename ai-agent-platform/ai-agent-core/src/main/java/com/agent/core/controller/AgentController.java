@@ -21,8 +21,9 @@ public class AgentController {
     private final AgentConfigService agentConfigService;
 
     @GetMapping
-    public Result<List<AgentConfigDTO>> listAgents() {
-        List<AgentVO> agents = agentConfigService.listAgents();
+    public Result<List<AgentConfigDTO>> listAgents(
+            @RequestHeader("X-User-Id") Long userId) {
+        List<AgentVO> agents = agentConfigService.listAgents(userId);
         return Result.success(agents.stream().map(this::convertToDTO).collect(Collectors.toList()));
     }
 
@@ -35,22 +36,27 @@ public class AgentController {
     }
 
     @GetMapping("/{id}")
-    public Result<AgentConfigDTO> getAgent(@PathVariable Long id) {
-        AgentVO vo = agentConfigService.getAgentById(id);
+    public Result<AgentConfigDTO> getAgent(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Id") Long userId) {
+        AgentVO vo = agentConfigService.getAgentById(id, userId);
         return Result.success(convertToDTO(vo));
     }
 
     @PutMapping("/{id}")
     public Result<AgentConfigDTO> updateAgent(
             @PathVariable Long id,
-            @RequestBody UpdateAgentRequest request) {
-        AgentVO vo = agentConfigService.updateAgent(id, request);
+            @RequestBody UpdateAgentRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        AgentVO vo = agentConfigService.updateAgent(id, request, userId);
         return Result.success(convertToDTO(vo));
     }
 
     @DeleteMapping("/{id}")
-    public Result<Void> deleteAgent(@PathVariable Long id) {
-        agentConfigService.deleteAgent(id);
+    public Result<Void> deleteAgent(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Id") Long userId) {
+        agentConfigService.deleteAgent(id, userId);
         return Result.success();
     }
 
