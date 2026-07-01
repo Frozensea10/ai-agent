@@ -19,6 +19,16 @@ function onTokenRefreshed(newToken: string) {
   refreshSubscribers = []
 }
 
+function extractMessage(error: any): string {
+  if (error?.response?.data?.message) {
+    return error.response.data.message
+  }
+  if (error?.message) {
+    return error.message
+  }
+  return '网络错误，请稍后重试'
+}
+
 request.interceptors.request.use(
   (config) => {
     const userStore = useUserStore()
@@ -36,8 +46,9 @@ request.interceptors.response.use(
   (response) => {
     const data = response.data
     if (data.code !== 200) {
-      ElMessage.error(data.message || '请求失败')
-      return Promise.reject(new Error(data.message))
+      const message = data.message || '请求失败'
+      ElMessage.error(message)
+      return Promise.reject(new Error(message))
     }
     return data
   },
@@ -64,7 +75,7 @@ request.interceptors.response.use(
         try {
           const refreshToken = localStorage.getItem('refreshToken')
           if (!refreshToken) {
-            throw new Error('No refresh token')
+            throw new Error('登录已过期，请重新登录')
           }
 
           const res = await axios.post('/api/v1/auth/refresh', {}, {
@@ -79,8 +90,11 @@ request.interceptors.response.use(
             originalRequest.headers.Authorization = `Bearer ${accessToken}`
             return request(originalRequest)
           }
+
+          throw new Error(res.data?.message || '登录已过期，请重新登录')
         } catch (refreshError) {
           userStore.logout()
+          ElMessage.error(extractMessage(refreshError))
           window.location.href = '/login'
           return Promise.reject(refreshError)
         } finally {
@@ -89,7 +103,8 @@ request.interceptors.response.use(
       }
     }
 
-    ElMessage.error(error.message || '网络错误')
+    const message = extractMessage(error)
+    ElMessage.error(message)
     return Promise.reject(error)
   }
 )

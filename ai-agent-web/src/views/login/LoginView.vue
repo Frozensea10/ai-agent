@@ -192,38 +192,36 @@ const registerRules: FormRules = {
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
-  await loginFormRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        await userStore.loginAction(loginForm)
-        ElMessage.success('登录成功')
-        router.push('/')
-      } catch (error) {
-        console.error(error)
-      } finally {
-        loading.value = false
-      }
-    }
-  })
+  const valid = await loginFormRef.value.validate().catch(() => false)
+  if (!valid) return
+
+  loading.value = true
+  try {
+    await userStore.loginAction(loginForm)
+    ElMessage.success('登录成功')
+    router.push('/')
+  } catch (error: any) {
+    console.error(error)
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleRegister = async () => {
   if (!registerFormRef.value) return
-  await registerFormRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        await userStore.registerAction(registerForm)
-        ElMessage.success('注册成功，请登录')
-        activeTab.value = 'login'
-      } catch (error) {
-        console.error(error)
-      } finally {
-        loading.value = false
-      }
-    }
-  })
+  const valid = await registerFormRef.value.validate().catch(() => false)
+  if (!valid) return
+
+  loading.value = true
+  try {
+    await userStore.registerAction(registerForm)
+    ElMessage.success('注册成功，请登录')
+    activeTab.value = 'login'
+  } catch (error: any) {
+    console.error(error)
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 

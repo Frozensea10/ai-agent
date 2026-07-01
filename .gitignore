@@ -60,7 +60,15 @@ create_session.json
 session_response.json
 messages.json
 agent_list.json
+wrong_login.json
+login-error*.json
+login-error*.png
+login-error*.js
+login-page.png
+Workspaceai-agentlogin-error.png
+screenshots/
 
 # Browser automation artifacts
-.stream/
+.agent-browser/
+.chrome-debug/
 browser-data/
