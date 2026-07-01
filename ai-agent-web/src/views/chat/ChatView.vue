@@ -4,21 +4,23 @@
       <div class="chat-sidebar" :class="{ open: sidebarOpen }">
         <div class="sidebar-header">
           <h3>会话列表</h3>
-          <button class="btn-pill btn-primary-pill new-chat-btn" @click="createNewChat">
+          <button class="btn-pill btn-primary-pill new-chat-btn" :disabled="loading" @click="createNewChat">
             <el-icon><Plus /></el-icon> 新对话
           </button>
         </div>
+        <div v-if="loading" class="loading-tip">加载中...</div>
         <div class="chat-list">
           <div
             v-for="session in chatSessions"
-            :key="session.id"
+            :key="session.sessionId"
             class="chat-session-item"
-            :class="{ active: currentSessionId === session.id }"
-            @click="selectSession(session.id)"
+            :class="{ active: currentSessionId === session.sessionId }"
+            @click="selectSession(session.sessionId)"
           >
             <el-icon><ChatSquare /></el-icon>
-            <span class="session-title">{{ session.title }}</span>
-            <span class="session-time">{{ session.time }}</span>
+            <span class="session-title">{{ session.sessionTitle || '未命名会话' }}</span>
+            <span class="session-time">{{ formatTime(session.updatedAt) }}</span>
+            <el-icon class="delete-icon" @click.stop="handleDeleteSession(session.sessionId)"><Delete /></el-icon>
           </div>
         </div>
       </div>
@@ -29,7 +31,7 @@
           <button class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen">
             <el-icon><Menu /></el-icon>
           </button>
-          <h3>{{ currentSession.title }}</h3>
+          <h3>{{ currentSession?.sessionTitle || '新对话' }}</h3>
         </div>
 
         <div class="chat-messages" ref="messagesRef">
@@ -43,7 +45,7 @@
 
           <div
             v-for="msg in messages"
-            :key="msg.id"
+            :key="msg.messageId"
             :class="['message', msg.role === 'user' ? 'user-message' : 'ai-message']"
           >
             <div class="message-content">
@@ -51,7 +53,7 @@
                 <el-icon v-if="msg.role === 'user'"><User /></el-icon>
                 <img v-else src="/assets/friendly-bot.jpg" alt="ai" />
               </div>
-              <div class="message-bubble" v-html="msg.content"></div>
+              <div class="message-bubble" v-html="renderMarkdown(msg.content)"></div>
             </div>
           </div>
         </div>
@@ -84,76 +86,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, computed } from 'vue'
-import { ChatDotRound, User, Promotion, Plus, ChatSquare, Menu } from '@element-plus/icons-vue'
+import { ref, nextTick, computed, onMounted } from 'vue'
+import { ChatDotRound, User, Promotion, Plus, ChatSquare, Menu, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { listSessions, createSession, deleteSession, getMessages, streamChat } from '@/api/chat'
+import type { ChatSession, ChatMessage } from '@/types/chat'
 
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-}
+const DEFAULT_AGENT_ID = 1
 
-interface ChatSession {
-  id: string
-  title: string
-  time: string
-  messages: Message[]
-}
-
-const chatSessions = ref<ChatSession[]>([
-  { id: '1', title: '新对话 1', time: '今天', messages: [] },
-  { id: '2', title: '知识库问答', time: '昨天', messages: [] },
-  { id: '3', title: '代码助手', time: '昨天', messages: [] },
-])
-const currentSessionId = ref('1')
+const chatSessions = ref<ChatSession[]>([])
+const currentSessionId = ref<string>('')
 const inputMessage = ref('')
 const sending = ref(false)
+const loading = ref(false)
 const messagesRef = ref<HTMLDivElement>()
 const sidebarOpen = ref(false)
+const abortFn = ref<(() => void) | null>(null)
 
 const currentSession = computed(() => {
-  return chatSessions.value.find((s) => s.id === currentSessionId.value) || chatSessions.value[0]
+  return chatSessions.value.find((s) => s.sessionId === currentSessionId.value)
 })
 
-const messages = computed(() => currentSession.value?.messages || [])
+const messages = ref<ChatMessage[]>([])
 
-const selectSession = (id: string) => {
-  currentSessionId.value = id
-  sidebarOpen.value = false
+const formatTime = (time?: string) => {
+  if (!time) return ''
+  const date = new Date(time)
+  const now = new Date()
+  const isToday = date.toDateString() === now.toDateString()
+  return isToday ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString()
 }
 
-const createNewChat = () => {
-  const id = Date.now().toString()
-  chatSessions.value.unshift({ id, title: '新对话', time: '刚刚', messages: [] })
-  currentSessionId.value = id
-}
-
-const sendMessage = async () => {
-  if (!inputMessage.value.trim() || sending.value) return
-
-  const userMsg: Message = {
-    id: Date.now().toString(),
-    role: 'user',
-    content: inputMessage.value
-  }
-
-  currentSession.value.messages.push(userMsg)
-  inputMessage.value = ''
-  sending.value = true
-
-  await nextTick()
-  scrollToBottom()
-
-  setTimeout(() => {
-    const aiMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: '这是一个模拟的 AI 回复。实际项目中会调用后端 SSE 接口实现流式对话。'
-    }
-    currentSession.value.messages.push(aiMsg)
-    sending.value = false
-    nextTick(scrollToBottom)
-  }, 1000)
+const renderMarkdown = (content: string) => {
+  return content.replace(/\n/g, '<br>')
 }
 
 const scrollToBottom = () => {
@@ -161,6 +126,125 @@ const scrollToBottom = () => {
     messagesRef.value.scrollTop = messagesRef.value.scrollHeight
   }
 }
+
+const loadSessions = async () => {
+  loading.value = true
+  try {
+    const data = await listSessions()
+    chatSessions.value = data || []
+    if (chatSessions.value.length > 0 && !currentSessionId.value) {
+      currentSessionId.value = chatSessions.value[0].sessionId
+      await loadMessages(chatSessions.value[0].sessionId)
+    }
+  } catch (e) {
+    ElMessage.error('加载会话列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadMessages = async (sessionId: string) => {
+  try {
+    const data = await getMessages(sessionId)
+    messages.value = data || []
+    await nextTick()
+    scrollToBottom()
+  } catch (e) {
+    ElMessage.error('加载消息历史失败')
+  }
+}
+
+const selectSession = async (sessionId: string) => {
+  currentSessionId.value = sessionId
+  sidebarOpen.value = false
+  await loadMessages(sessionId)
+}
+
+const createNewChat = async () => {
+  try {
+    const data = await createSession({ agentId: DEFAULT_AGENT_ID, title: '新对话' })
+    chatSessions.value.unshift(data)
+    currentSessionId.value = data.sessionId
+    messages.value = []
+    sidebarOpen.value = false
+  } catch (e) {
+    ElMessage.error('创建会话失败')
+  }
+}
+
+const handleDeleteSession = async (sessionId: string) => {
+  try {
+    await ElMessageBox.confirm('确定删除该会话吗？', '提示', { type: 'warning' })
+    await deleteSession(sessionId)
+    chatSessions.value = chatSessions.value.filter((s) => s.sessionId !== sessionId)
+    if (currentSessionId.value === sessionId) {
+      currentSessionId.value = chatSessions.value[0]?.sessionId || ''
+      messages.value = []
+    }
+    ElMessage.success('删除成功')
+  } catch {
+    // cancel
+  }
+}
+
+const sendMessage = async () => {
+  if (!inputMessage.value.trim() || sending.value) return
+  if (!currentSessionId.value) {
+    await createNewChat()
+    if (!currentSessionId.value) return
+  }
+
+  const content = inputMessage.value.trim()
+  const userMsg: ChatMessage = {
+    id: Date.now(),
+    messageId: `msg_${Date.now()}`,
+    role: 'user',
+    content,
+    createdAt: new Date().toISOString()
+  }
+
+  messages.value.push(userMsg)
+  inputMessage.value = ''
+  sending.value = true
+
+  await nextTick()
+  scrollToBottom()
+
+  const aiMsg: ChatMessage = {
+    id: Date.now() + 1,
+    messageId: `msg_${Date.now() + 1}`,
+    role: 'assistant',
+    content: '',
+    createdAt: new Date().toISOString()
+  }
+  messages.value.push(aiMsg)
+
+  abortFn.value = streamChat(
+    currentSessionId.value,
+    content,
+    DEFAULT_AGENT_ID,
+    (chunk) => {
+      aiMsg.content += chunk
+      nextTick(scrollToBottom)
+    },
+    () => {
+      sending.value = false
+      abortFn.value = null
+      nextTick(scrollToBottom)
+    },
+    (error) => {
+      sending.value = false
+      abortFn.value = null
+      aiMsg.content += `\n[错误: ${error}]`
+      ElMessage.error(error)
+      nextTick(scrollToBottom)
+    }
+  )
+}
+
+onMounted(() => {
+  loadSessions()
+})
 </script>
 
 <style scoped>
@@ -198,13 +282,9 @@ const scrollToBottom = () => {
   color: var(--text-dark);
 }
 
-.new-chat-btn {
-  width: 100%;
-  justify-content: center;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
+.loading-tip {
+  padding: 10px 20px;
+  color: #888;
   font-size: 14px;
 }
 
@@ -218,26 +298,20 @@ const scrollToBottom = () => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  padding: 12px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid transparent;
-  margin-bottom: 8px;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.chat-session-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.chat-session-item.active {
+  background: var(--teal);
   color: var(--text-dark);
-  font-weight: 600;
-}
-
-.chat-session-item:hover,
-.chat-session-item.active {
-  background: var(--cream);
-  border-color: var(--text-dark);
-  box-shadow: 3px 3px 0 var(--text-dark);
-}
-
-.chat-session-item.active {
-  background: var(--coral);
-  color: white;
 }
 
 .session-title {
@@ -245,11 +319,22 @@ const scrollToBottom = () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .session-time {
   font-size: 12px;
-  opacity: 0.8;
+  opacity: 0.6;
+}
+
+.delete-icon {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.chat-session-item:hover .delete-icon {
+  opacity: 1;
 }
 
 .chat-backdrop {
@@ -260,7 +345,7 @@ const scrollToBottom = () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--cream);
+  min-width: 0;
   position: relative;
 }
 
@@ -268,28 +353,23 @@ const scrollToBottom = () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 20px;
-  background: var(--card-bg);
+  padding: 16px 24px;
   border-bottom: 3px solid var(--text-dark);
+  background: var(--card-bg);
 }
 
 .chat-main-header h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 800;
-  color: var(--text-dark);
 }
 
 .sidebar-toggle {
   display: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 2px solid var(--text-dark);
-  background: var(--card-bg);
+  background: none;
+  border: none;
+  font-size: 20px;
   cursor: pointer;
-  align-items: center;
-  justify-content: center;
   color: var(--text-dark);
 }
 
@@ -297,74 +377,57 @@ const scrollToBottom = () => {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-medium);
+  margin: auto;
+  text-align: center;
+  color: #888;
 }
 
 .empty-cloud {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: var(--teal);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 40px;
-  border: 3px solid var(--text-dark);
-  box-shadow: 4px 4px 0 var(--text-dark);
-  margin-bottom: 20px;
-  animation: float 4s ease-in-out infinite;
-}
-
-.empty-state p {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-dark);
-  margin: 0 0 6px 0;
+  font-size: 64px;
+  color: var(--teal);
+  margin-bottom: 16px;
 }
 
 .empty-hint {
-  font-size: 13px;
-  color: var(--text-medium);
-  font-weight: 600;
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
 }
 
 .message {
-  margin-bottom: 20px;
+  display: flex;
 }
 
 .message-content {
   display: flex;
   gap: 12px;
   max-width: 80%;
-  align-items: flex-start;
+}
+
+.user-message {
+  justify-content: flex-end;
 }
 
 .user-message .message-content {
-  margin-left: auto;
   flex-direction: row-reverse;
 }
 
 .message-avatar {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  border: 3px solid var(--text-dark);
-  box-shadow: 3px 3px 0 var(--text-dark);
   flex-shrink: 0;
   overflow: hidden;
+  border: 2px solid var(--text-dark);
 }
 
 .message-avatar img {
@@ -374,97 +437,48 @@ const scrollToBottom = () => {
 }
 
 .message-bubble {
-  padding: 14px 18px;
-  border-radius: 20px;
   background: var(--card-bg);
-  color: var(--text-dark);
-  border: 3px solid var(--text-dark);
+  border: 2px solid var(--text-dark);
+  border-radius: 16px;
+  padding: 12px 16px;
   box-shadow: 4px 4px 0 var(--text-dark);
+  font-size: 14px;
+  line-height: 1.6;
   word-break: break-word;
-  font-weight: 600;
-  line-height: 1.5;
 }
 
 .user-message .message-bubble {
   background: var(--coral);
   color: white;
-  border-radius: 20px 20px 4px 20px;
-}
-
-.ai-message .message-bubble {
-  border-radius: 20px 20px 20px 4px;
 }
 
 .chat-input-area {
-  padding: 16px 20px 24px;
-  background: var(--card-bg);
+  padding: 16px 24px;
   border-top: 3px solid var(--text-dark);
+  background: var(--card-bg);
 }
 
 .chat-input-wrap {
   display: flex;
   gap: 12px;
-  align-items: flex-end;
-}
-
-.chat-input-wrap :deep(.el-textarea__inner) {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  font-family: 'Nunito', sans-serif;
-  font-weight: 600;
-  color: var(--text-dark);
 }
 
 .send-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 12px 22px;
-  flex-shrink: 0;
-  font-size: 14px;
-}
-
-.send-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  align-self: flex-end;
+  white-space: nowrap;
 }
 
 .input-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 10px;
+  margin-top: 8px;
+  text-align: right;
 }
 
 .hint {
-  color: var(--text-medium);
   font-size: 12px;
-  font-weight: 600;
+  color: #888;
 }
 
-.deco-img {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  pointer-events: none;
-}
-
-.deco-planet {
-  bottom: 100px;
-  right: 24px;
-  animation: float 5s ease-in-out infinite;
-}
-
-.deco-moon {
-  top: 20px;
-  right: 100px;
-  animation: twinkle 4s ease-in-out infinite;
-}
-
-@media (max-width: 1024px) {
+@media (max-width: 768px) {
   .chat-sidebar {
     position: fixed;
     left: 0;
@@ -472,9 +486,7 @@ const scrollToBottom = () => {
     bottom: 0;
     z-index: 100;
     transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    border-right: none;
-    border-right: 3px solid var(--text-dark);
+    transition: transform 0.3s;
   }
 
   .chat-sidebar.open {
@@ -485,11 +497,11 @@ const scrollToBottom = () => {
     display: block;
     position: fixed;
     inset: 72px 0 0 0;
-    background: rgba(45, 52, 54, 0.3);
+    background: rgba(0, 0, 0, 0.3);
     z-index: 99;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.3s;
   }
 
   .chat-backdrop.open {
@@ -498,34 +510,11 @@ const scrollToBottom = () => {
   }
 
   .sidebar-toggle {
-    display: flex;
-  }
-
-  .deco-planet,
-  .deco-moon {
-    display: none;
-  }
-}
-
-@media (max-width: 767px) {
-  .chat-main-header {
-    padding: 12px 16px;
-  }
-
-  .chat-messages {
-    padding: 16px;
+    display: block;
   }
 
   .message-content {
     max-width: 90%;
-  }
-
-  .chat-input-area {
-    padding: 12px 16px 16px;
-  }
-
-  .send-btn {
-    padding: 10px 14px;
   }
 }
 </style>

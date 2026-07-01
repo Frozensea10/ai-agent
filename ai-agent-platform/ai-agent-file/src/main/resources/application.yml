@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: ai-agent-file
+  main:
+    allow-bean-definition-overriding: true
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        import-check:
+          enabled: false
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+server:
+  port: 8085
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: minio
+  secret-key: minio123
+  bucket-name: ai-agent-files
+
+jwt:
+  secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
+
+logging:
+  level:
+    com.agent.file: debug

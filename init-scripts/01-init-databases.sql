@@ -122,3 +122,65 @@ ON DUPLICATE KEY UPDATE permission_name = permission_name;
 INSERT INTO sys_role_permission (role_id, permission_id)
 SELECT r.id, p.id FROM sys_role r, sys_permission p WHERE r.role_code = 'ADMIN' AND p.permission_code = 'mcp:manage'
 ON DUPLICATE KEY UPDATE role_id = role_id;
+
+-- Agent 配置表
+CREATE TABLE IF NOT EXISTS agent_config (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    agent_name VARCHAR(100) NOT NULL,
+    agent_code VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    model_provider VARCHAR(50),
+    model_name VARCHAR(100),
+    system_prompt TEXT,
+    temperature DOUBLE DEFAULT 0.7,
+    max_tokens INT DEFAULT 2048,
+    memory_type VARCHAR(20) DEFAULT 'window',
+    memory_max_messages INT DEFAULT 10,
+    agent_type VARCHAR(20) DEFAULT 'single',
+    parent_agent_id BIGINT,
+    capabilities JSON,
+    priority INT DEFAULT 0,
+    status TINYINT DEFAULT 1,
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted TINYINT DEFAULT 0
+);
+
+-- 初始化默认 Agent（通用助手）
+INSERT INTO agent_config (id, agent_name, agent_code, description, model_provider, model_name, system_prompt, temperature, max_tokens, memory_type, memory_max_messages, agent_type, status, created_by)
+VALUES (1, '通用助手', 'default-assistant', '默认通用 AI 助手，可回答日常问题', 'openai', 'gpt-3.5-turbo', '你是一个 helpful 的 AI 助手。', 0.7, 2048, 'window', 10, 'single', 1, 1)
+ON DUPLICATE KEY UPDATE agent_name = agent_name;
+
+-- 会话表
+CREATE TABLE IF NOT EXISTS chat_session (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    session_id VARCHAR(64) NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL,
+    agent_id BIGINT,
+    kb_id BIGINT,
+    session_title VARCHAR(255),
+    message_count INT DEFAULT 0,
+    status TINYINT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted TINYINT DEFAULT 0
+);
+
+-- 消息表
+CREATE TABLE IF NOT EXISTS chat_message (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    session_id VARCHAR(64) NOT NULL,
+    message_id VARCHAR(64) NOT NULL UNIQUE,
+    role VARCHAR(20) NOT NULL,
+    content TEXT,
+    content_type VARCHAR(20) DEFAULT 'text',
+    tokens_used INT,
+    model_name VARCHAR(100),
+    tool_calls JSON,
+    parent_message_id VARCHAR(64),
+    status TINYINT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted TINYINT DEFAULT 0
+);
+
