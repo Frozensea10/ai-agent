@@ -239,8 +239,11 @@ const handleDeleteSession = async (sessionId: string) => {
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || sending.value) return
   if (!currentSessionId.value) {
-    await createSession({ agentId: DEFAULT_AGENT_ID, title: '新对话' })
-    if (!currentSessionId.value) return
+    const session = await createSession({ agentId: DEFAULT_AGENT_ID, title: '新对话' })
+    if (!session?.sessionId) return
+    chatSessions.value.unshift(session)
+    currentSessionId.value = session.sessionId
+    messages.value = []
   }
 
   const content = inputMessage.value.trim()
