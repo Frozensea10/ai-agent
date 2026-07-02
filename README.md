@@ -58,9 +58,41 @@ docker-compose up -d
 docker-compose down -v && docker-compose up -d
 ```
 
-### 5. 启动后端服务
+### 5. 一键启动（推荐）
 
-在 `ai-agent-platform` 目录下，逐个启动微服务（确保第 1 步的环境变量已加载）：
+项目已提供统一启动脚本，会自动检查端口占用、加载 `.env`、启动 Docker 基础设施、按顺序启动 7 个后端服务，最后启动前端 dev server。
+
+**Windows（PowerShell 7+）：**
+
+```powershell
+# 从项目根目录执行
+./scripts/start-local.ps1
+
+# 如果本地 MySQL 服务占用 3306，可加 -StopMySQLService 自动停止
+./scripts/start-local.ps1 -StopMySQLService
+
+# 跳过基础设施/后端/前端中的某一部分
+./scripts/start-local.ps1 -SkipInfra -SkipFrontend
+```
+
+**Linux / macOS：**
+
+```bash
+# 从项目根目录执行
+./scripts/start-local.sh
+
+# 如果本地 MySQL 服务占用 3306，可加 --stop-mysql-service
+./scripts/start-local.sh --stop-mysql-service
+
+# 跳过基础设施/后端/前端中的某一部分
+./scripts/start-local.sh --skip-infra --skip-frontend
+```
+
+脚本会在每个服务启动后等待 `/actuator/health` 就绪，因此首次启动可能需要几分钟。
+
+### 6. 手动启动后端服务（备选）
+
+如果不想使用脚本，可以在 `ai-agent-platform` 目录下逐个启动微服务（确保第 1 步的环境变量已加载）：
 
 ```bash
 cd ai-agent-platform
@@ -75,22 +107,7 @@ mvn -pl ai-agent-mcp spring-boot:run -D"spring-boot.run.profiles=dev"
 mvn -pl ai-agent-file spring-boot:run -D"spring-boot.run.profiles=dev"
 ```
 
-或使用 PowerShell 一次性启动多个（每个在独立窗口）：
-
-```powershell
-$cmds = @(
-  'mvn -pl ai-agent-gateway spring-boot:run -D"spring-boot.run.profiles=dev"',
-  'mvn -pl ai-agent-user spring-boot:run -D"spring-boot.run.profiles=dev"',
-  'mvn -pl ai-agent-core spring-boot:run -D"spring-boot.run.profiles=dev"',
-  'mvn -pl ai-agent-chat spring-boot:run -D"spring-boot.run.profiles=dev"',
-  'mvn -pl ai-agent-knowledge spring-boot:run -D"spring-boot.run.profiles=dev"',
-  'mvn -pl ai-agent-mcp spring-boot:run -D"spring-boot.run.profiles=dev"',
-  'mvn -pl ai-agent-file spring-boot:run -D"spring-boot.run.profiles=dev"'
-)
-foreach ($cmd in $cmds) { Start-Process powershell -ArgumentList "-NoExit", "-Command", $cmd }
-```
-
-### 6. 启动前端
+### 7. 手动启动前端（备选）
 
 ```bash
 cd ai-agent-web
