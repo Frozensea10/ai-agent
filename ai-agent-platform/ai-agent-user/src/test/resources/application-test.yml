@@ -11,7 +11,7 @@ spring:
     url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false
     driver-class-name: org.h2.Driver
     username: sa
-    password:
+    password: ${MYSQL_PASSWORD:}
   sql:
     init:
       mode: always
@@ -19,7 +19,7 @@ spring:
       data-locations: classpath:db/data.sql
 
 jwt:
-  secret: TestSecretKeyForAiAgentPlatform2026!@#$
+  secret: ${JWT_SECRET:TestSecretKeyForAiAgentPlatform2026!@#$}
   access-token-expire: 86400000
   refresh-token-expire: 604800000
 

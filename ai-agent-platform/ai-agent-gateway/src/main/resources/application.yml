@@ -111,6 +111,7 @@ server:
   port: 8080
 
 jwt:
+  # 生产环境请务必通过环境变量 JWT_SECRET 覆盖，不要使用默认值
   secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
 
 logging:

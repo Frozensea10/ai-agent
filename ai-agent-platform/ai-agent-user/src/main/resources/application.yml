@@ -13,7 +13,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/ai_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: ai_agent
-    password: ai_agent123
+    password: ${MYSQL_PASSWORD:ai_agent123}
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
@@ -50,6 +50,7 @@ mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
 
 jwt:
+  # 生产环境请务必通过环境变量 JWT_SECRET 覆盖，不要使用默认值
   secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
 
 logging:

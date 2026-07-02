@@ -1,0 +1,7 @@
+chore(config): externalize secrets to environment variables
+
+- Replace hardcoded MySQL password with ${MYSQL_PASSWORD:ai_agent123} in all services
+- Replace hardcoded MinIO access/secret keys with ${MINIO_ACCESS_KEY:minio} / ${MINIO_SECRET_KEY:minio123}
+- Add warning comments above JWT_SECRET placeholders in production configs
+- Update test application-test.yml files to use ${JWT_SECRET:...} placeholders
+- Expand .env.example to document all environment variables (LLM keys, JWT, DB, MinIO, Redis, Qdrant, Nacos, RabbitMQ)

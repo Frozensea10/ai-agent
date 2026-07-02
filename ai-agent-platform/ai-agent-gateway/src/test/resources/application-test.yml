@@ -15,7 +15,7 @@ spring:
             - Path=/api/v1/auth/**, /api/v1/user/**
 
 jwt:
-  secret: TestSecretKeyForAiAgentPlatform2026!@#$
+  secret: ${JWT_SECRET:TestSecretKeyForAiAgentPlatform2026!@#$}
   access-token-expire: 86400000
   refresh-token-expire: 604800000
 

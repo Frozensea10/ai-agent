@@ -33,11 +33,12 @@ server:
 
 minio:
   endpoint: http://localhost:9000
-  access-key: minio
-  secret-key: minio123
+  access-key: ${MINIO_ACCESS_KEY:minio}
+  secret-key: ${MINIO_SECRET_KEY:minio123}
   bucket-name: ai-agent-files
 
 jwt:
+  # 生产环境请务必通过环境变量 JWT_SECRET 覆盖，不要使用默认值
   secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
 
 logging:
