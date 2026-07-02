@@ -1,4 +1,4 @@
-<template>
+ <template>
   <div class="knowledge-view">
     <div class="page-header">
       <div class="header-text">
@@ -34,6 +34,7 @@
               </div>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item command="edit">编辑</el-dropdown-item>
                   <el-dropdown-item command="upload">上传文档</el-dropdown-item>
                   <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
                 </el-dropdown-menu>
@@ -91,6 +92,31 @@
       </template>
     </el-dialog>
 
+    <!-- 编辑知识库对话框 -->
+    <el-dialog v-model="showEditDialog" title="编辑知识库" width="500px" class="cute-dialog">
+      <el-form :model="editForm" :rules="editRules" ref="editFormRef" label-width="100px">
+        <el-form-item label="编码">
+          <el-input v-model="editForm.kbCode" disabled />
+        </el-form-item>
+        <el-form-item label="名称" prop="kbName">
+          <el-input v-model="editForm.kbName" placeholder="知识库名称" />
+        </el-form-item>
+        <el-form-item label="描述" prop="description">
+          <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="知识库描述" />
+        </el-form-item>
+        <el-form-item label="嵌入模型" prop="embeddingModel">
+          <el-select v-model="editForm.embeddingModel" placeholder="选择嵌入模型" style="width: 100%">
+            <el-option label="text-embedding-3-small" value="text-embedding-3-small" />
+            <el-option label="text-embedding-3-large" value="text-embedding-3-large" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEditDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleEdit" :loading="editing">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 上传文档对话框 -->
     <el-dialog v-model="showUploadDialog" title="上传文档" width="500px" class="cute-dialog">
       <el-upload
@@ -122,7 +148,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Document, Timer, More, UploadFilled, Collection, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules, UploadFile, UploadInstance } from 'element-plus'
-import { getKnowledgeBases, createKnowledgeBase, deleteKnowledgeBase, uploadDocument } from '@/api/knowledge'
+import { getKnowledgeBases, createKnowledgeBase, updateKnowledgeBase, deleteKnowledgeBase, uploadDocument } from '@/api/knowledge'
 import type { KnowledgeBase } from '@/types/knowledge'
 
 const pastelColors = ['#E0F7FA', '#F8BBD0', '#FFF9C4', '#E8F5E9', '#F3E5F5', '#FFE0B2']
@@ -135,11 +161,15 @@ const getPastelColor = (id: number | string) => {
 const knowledgeBases = ref<KnowledgeBase[]>([])
 const searchKeyword = ref('')
 const showCreateDialog = ref(false)
+const showEditDialog = ref(false)
 const showUploadDialog = ref(false)
 const creating = ref(false)
+const editing = ref(false)
 const uploading = ref(false)
 const currentKb = ref<KnowledgeBase | null>(null)
+const currentKbForEdit = ref<KnowledgeBase | null>(null)
 const createFormRef = ref<FormInstance>()
+const editFormRef = ref<FormInstance>()
 const uploadRef = ref<UploadInstance>()
 const selectedFile = ref<UploadFile | null>(null)
 
@@ -150,9 +180,20 @@ const createForm = reactive({
   embeddingModel: 'text-embedding-3-small'
 })
 
+const editForm = reactive({
+  kbCode: '',
+  kbName: '',
+  description: '',
+  embeddingModel: 'text-embedding-3-small'
+})
+
 const createRules: FormRules = {
   kbName: [{ required: true, message: '请输入知识库名称', trigger: 'blur' }],
   kbCode: [{ required: true, message: '请输入知识库编码', trigger: 'blur' }],
+}
+
+const editRules: FormRules = {
+  kbName: [{ required: true, message: '请输入知识库名称', trigger: 'blur' }],
 }
 
 const filteredKnowledgeBases = computed(() => {
@@ -194,8 +235,39 @@ const handleCreate = async () => {
   })
 }
 
+const openEditDialog = (kb: KnowledgeBase) => {
+  currentKbForEdit.value = kb
+  editForm.kbCode = kb.kbCode
+  editForm.kbName = kb.kbName
+  editForm.description = kb.description || ''
+  editForm.embeddingModel = kb.embeddingModel || 'text-embedding-3-small'
+  showEditDialog.value = true
+}
+
+const handleEdit = async () => {
+  const kb = currentKbForEdit.value
+  if (!editFormRef.value || !kb) return
+  await editFormRef.value.validate(async (valid) => {
+    if (valid) {
+      editing.value = true
+      try {
+        await updateKnowledgeBase(kb.id, editForm)
+        ElMessage.success('更新成功')
+        showEditDialog.value = false
+        await loadKnowledgeBases()
+      } catch (error: any) {
+        ElMessage.error(error.message || '更新失败')
+      } finally {
+        editing.value = false
+      }
+    }
+  })
+}
+
 const handleCommand = (command: string, kb: KnowledgeBase) => {
-  if (command === 'upload') {
+  if (command === 'edit') {
+    openEditDialog(kb)
+  } else if (command === 'upload') {
     currentKb.value = kb
     selectedFile.value = null
     showUploadDialog.value = true
