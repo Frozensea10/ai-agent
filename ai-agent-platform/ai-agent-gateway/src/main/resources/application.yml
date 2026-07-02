@@ -1,3 +1,6 @@
+springdoc:
+  enable-native-support: true
+
 spring:
   application:
     name: ai-agent-gateway
@@ -67,6 +70,42 @@ spring:
             - Path=/api/v1/files/**
           filters:
             - StripPrefix=0
+        - id: user-service-docs
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/user/v3/api-docs/**
+          filters:
+            - RewritePath=/api/user/(?<segment>.*), /$\{segment}
+        - id: agent-service-docs
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/agent/v3/api-docs/**
+          filters:
+            - RewritePath=/api/agent/(?<segment>.*), /$\{segment}
+        - id: knowledge-service-docs
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/knowledge/v3/api-docs/**
+          filters:
+            - RewritePath=/api/knowledge/(?<segment>.*), /$\{segment}
+        - id: chat-service-docs
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/chat/v3/api-docs/**
+          filters:
+            - RewritePath=/api/chat/(?<segment>.*), /$\{segment}
+        - id: mcp-service-docs
+          uri: http://localhost:8086
+          predicates:
+            - Path=/api/mcp/v3/api-docs/**
+          filters:
+            - RewritePath=/api/mcp/(?<segment>.*), /$\{segment}
+        - id: file-service-docs
+          uri: http://localhost:8085
+          predicates:
+            - Path=/api/file/v3/api-docs/**
+          filters:
+            - RewritePath=/api/file/(?<segment>.*), /$\{segment}
 
 server:
   port: 8080

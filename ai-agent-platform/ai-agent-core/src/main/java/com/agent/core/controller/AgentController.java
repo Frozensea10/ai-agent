@@ -6,6 +6,8 @@ import com.agent.core.dto.CreateAgentRequest;
 import com.agent.core.dto.UpdateAgentRequest;
 import com.agent.core.service.AgentConfigService;
 import com.agent.core.vo.AgentVO;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Tag(name = "Agent 管理", description = "Agent 配置与生命周期管理接口")
 @RestController
 @RequestMapping("/api/v1/agents")
 @RequiredArgsConstructor
@@ -20,6 +23,7 @@ public class AgentController {
 
     private final AgentConfigService agentConfigService;
 
+    @Operation(summary = "查询 Agent 列表", description = "根据当前用户查询其拥有的所有 Agent 配置")
     @GetMapping
     public Result<List<AgentConfigDTO>> listAgents(
             @RequestHeader("X-User-Id") Long userId) {
@@ -27,6 +31,7 @@ public class AgentController {
         return Result.success(agents.stream().map(this::convertToDTO).collect(Collectors.toList()));
     }
 
+    @Operation(summary = "创建 Agent", description = "为当前用户创建新的 Agent 配置")
     @PostMapping
     public Result<AgentConfigDTO> createAgent(
             @Valid @RequestBody CreateAgentRequest request,
@@ -35,6 +40,7 @@ public class AgentController {
         return Result.success(convertToDTO(vo));
     }
 
+    @Operation(summary = "查询 Agent 详情", description = "根据 Agent ID 查询指定 Agent 配置")
     @GetMapping("/{id}")
     public Result<AgentConfigDTO> getAgent(
             @PathVariable Long id,
@@ -43,6 +49,7 @@ public class AgentController {
         return Result.success(convertToDTO(vo));
     }
 
+    @Operation(summary = "更新 Agent", description = "根据 Agent ID 更新 Agent 配置")
     @PutMapping("/{id}")
     public Result<AgentConfigDTO> updateAgent(
             @PathVariable Long id,
@@ -52,6 +59,7 @@ public class AgentController {
         return Result.success(convertToDTO(vo));
     }
 
+    @Operation(summary = "删除 Agent", description = "根据 Agent ID 删除指定 Agent 配置")
     @DeleteMapping("/{id}")
     public Result<Void> deleteAgent(
             @PathVariable Long id,

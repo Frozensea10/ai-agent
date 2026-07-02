@@ -4,6 +4,8 @@ import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
 import com.agent.common.result.Result;
 import com.agent.file.service.FileService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Tag(name = "文件管理", description = "文件上传、下载、列表与预览接口")
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/files")
@@ -26,6 +29,7 @@ public class FileController {
 
     private final FileService fileService;
 
+    @Operation(summary = "上传文件", description = "上传单个文件到对象存储")
     @PostMapping("/upload")
     public Result<String> upload(@RequestParam("file") MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -35,6 +39,7 @@ public class FileController {
         return Result.success(objectName);
     }
 
+    @Operation(summary = "查询文件列表", description = "查询对象存储中所有文件的基本信息")
     @GetMapping
     public Result<List<Map<String, Object>>> listFiles() {
         List<String> objectNames = fileService.listObjects();
@@ -100,6 +105,7 @@ public class FileController {
         return Result.success();
     }
 
+    @Operation(summary = "获取文件预览地址", description = "根据对象名称获取文件访问 URL")
     @GetMapping("/{objectName}/url")
     public Result<String> getPreviewUrl(@PathVariable String objectName) {
         String url = fileService.getPreviewUrl(objectName);

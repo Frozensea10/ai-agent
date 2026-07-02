@@ -21,6 +21,8 @@ import com.agent.core.llm.service.LLMService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
 
 import static com.agent.chat.controller.ChatControllerConstants.HEADER_USER_ID;
 
+@Tag(name = "会话管理", description = "聊天会话、消息发送与流式对话接口")
 @Slf4j
 @RestController
 @RequestMapping("/api/v1")
@@ -51,12 +54,14 @@ public class ChatController {
 
     private final ObjectMapper objectMapper;
 
+    @Operation(summary = "查询会话列表", description = "查询当前用户的所有聊天会话")
     @GetMapping("/sessions")
     public Result<List<ChatSessionVO>> listSessions(@RequestHeader(HEADER_USER_ID) Long userId) {
         List<ChatSession> sessions = sessionService.listSessions(userId);
         return Result.success(sessions.stream().map(this::convertToSessionVO).collect(Collectors.toList()));
     }
 
+    @Operation(summary = "创建会话", description = "为当前用户创建新的聊天会话")
     @PostMapping("/sessions")
     public Result<ChatSessionVO> createSession(
             @Valid @RequestBody CreateSessionRequest request,
@@ -65,6 +70,7 @@ public class ChatController {
         return Result.success(convertToSessionVO(session));
     }
 
+    @Operation(summary = "删除会话", description = "根据会话 ID 删除会话并清空对应记忆")
     @DeleteMapping("/sessions/{sessionId}")
     public Result<Void> deleteSession(
             @PathVariable @NotBlank String sessionId,
@@ -74,6 +80,7 @@ public class ChatController {
         return Result.success();
     }
 
+    @Operation(summary = "查询会话消息", description = "根据会话 ID 查询历史消息列表")
     @GetMapping("/sessions/{sessionId}/messages")
     public Result<List<ChatMessageVO>> getMessages(
             @PathVariable @NotBlank String sessionId,
@@ -83,6 +90,7 @@ public class ChatController {
         return Result.success(messages.stream().map(this::convertToMessageVO).collect(Collectors.toList()));
     }
 
+    @Operation(summary = "发送消息", description = "向指定会话发送非流式消息，返回 AI 回复")
     @PostMapping("/sessions/{sessionId}/messages")
     public Result<ChatMessageVO> sendMessage(
             @PathVariable @NotBlank String sessionId,
@@ -121,6 +129,7 @@ public class ChatController {
         return Result.success(convertToMessageVO(aiMessage));
     }
 
+    @Operation(summary = "流式对话", description = "向指定会话发送消息并以 SSE 流式返回 AI 回复")
     @GetMapping(value = "/sessions/{sessionId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> streamChat(
             @PathVariable @NotBlank String sessionId,

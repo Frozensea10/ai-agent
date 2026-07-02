@@ -1,8 +1,0 @@
-feat(chat): integrate RAG knowledge base into chat stream
-
-- Add KnowledgeFeignClient in ai-agent-chat to call knowledge retrieval/RAG
-- Extend ChatLLMService with ragContext parameter and prompt augmentation
-- Support kbCode query parameter in streamChat and request body in sendMessage
-- Expose kbCode in ChatSessionVO for frontend use
-- Update frontend chat types, streamChat API and ChatView to pass kbCode
-- Add spring-cloud-starter-openfeign dependency to ai-agent-chat
