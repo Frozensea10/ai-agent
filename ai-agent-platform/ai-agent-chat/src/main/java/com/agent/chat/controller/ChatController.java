@@ -2,6 +2,8 @@ package com.agent.chat.controller;
 
 import com.agent.chat.dto.CreateSessionRequest;
 import com.agent.chat.dto.SendMessageRequest;
+import com.agent.chat.dto.SSEMessage;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agent.chat.entity.ChatMessage;
 import com.agent.chat.entity.ChatSession;
 import com.agent.chat.feign.AgentFeignClient;
@@ -44,6 +46,8 @@ public class ChatController {
     private final LLMService llmService;
     private final AgentFeignClient agentFeignClient;
     private final ChatMemoryProvider chatMemoryProvider;
+
+    private final ObjectMapper objectMapper;
 
     @GetMapping("/sessions")
     public Result<List<ChatSessionVO>> listSessions(@RequestHeader(HEADER_USER_ID) Long userId) {
@@ -118,28 +122,43 @@ public class ChatController {
             @RequestParam @NotBlank String content,
             @RequestParam @NotNull Long agentId,
             @RequestHeader(HEADER_USER_ID) Long userId) {
-        sessionService.getSession(sessionId, userId);
+        try {
+            sessionService.getSession(sessionId, userId);
 
-        AgentConfigDTO agent = resolveAgent(agentId);
+            AgentConfigDTO agent = resolveAgent(agentId);
 
-        messageService.saveUserMessage(sessionId, content);
+            StreamingChatModel streamingModel = llmService.createStreamingModel(
+                    agent.getModelProvider(),
+                    agent.getModelName(),
+                    agent.getTemperature(),
+                    agent.getMaxTokens()
+            );
 
-        StreamingChatModel streamingModel = llmService.createStreamingModel(
-                agent.getModelProvider(),
-                agent.getModelName(),
-                agent.getTemperature(),
-                agent.getMaxTokens()
-        );
+            messageService.saveUserMessage(sessionId, content);
 
-        return chatLLMService.streamChat(
-                sessionId,
-                content,
-                agent.getSystemPrompt(),
-                agent.getMemoryType(),
-                agent.getMemoryMaxMessages(),
-                streamingModel,
-                agent.getModelName()
-        );
+            return chatLLMService.streamChat(
+                    sessionId,
+                    content,
+                    agent.getSystemPrompt(),
+                    agent.getMemoryType(),
+                    agent.getMemoryMaxMessages(),
+                    streamingModel,
+                    agent.getModelName()
+            );
+        } catch (BusinessException e) {
+            return Flux.just(toJson(SSEMessage.error(e.getMessage())));
+        } catch (Exception e) {
+            return Flux.just(toJson(SSEMessage.error("流式对话失败: " + e.getMessage())));
+        }
+    }
+
+    private String toJson(SSEMessage message) {
+        try {
+            return "data: " + objectMapper.writeValueAsString(message) + "\n\n";
+        } catch (Exception ex) {
+            log.error("序列化 SSEMessage 失败", ex);
+            return "data: {}\n\n";
+        }
     }
 
     private AgentConfigDTO resolveAgent(Long agentId) {

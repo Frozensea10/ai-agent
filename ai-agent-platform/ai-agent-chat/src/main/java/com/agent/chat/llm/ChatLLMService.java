@@ -130,13 +130,7 @@ public class ChatLLMService {
             @Override
             public void onError(Throwable error) {
                 log.error("流式对话错误", error);
-                try {
-                    sink.tryEmitNext(toJson(SSEMessage.error(error.getMessage())));
-                    sink.tryEmitComplete();
-                } catch (Exception e) {
-                    log.error("发送 error 消息失败", e);
-                    sink.tryEmitError(error);
-                }
+                emitErrorAndComplete(sink, error.getMessage());
             }
         });
 
@@ -145,9 +139,20 @@ public class ChatLLMService {
                     cancelled.set(true);
                     log.info("流式对话被取消: sessionId={}", sessionId);
                 })
-                .doOnError(error -> {
+                .onErrorResume(error -> {
                     log.error("流式对话异常", error);
+                    return Flux.just(toJson(SSEMessage.error("流式对话失败: " + error.getMessage())));
                 });
+    }
+
+    private void emitErrorAndComplete(Sinks.Many<String> sink, String message) {
+        try {
+            sink.tryEmitNext(toJson(SSEMessage.error(message)));
+            sink.tryEmitComplete();
+        } catch (Exception e) {
+            log.error("发送 error 消息失败", e);
+            sink.tryEmitError(e);
+        }
     }
 
     private String processToolCalls(String content) {
