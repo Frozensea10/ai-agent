@@ -45,6 +45,15 @@ public class KnowledgeBaseController {
         return Result.success(knowledgeBaseService.getKnowledgeBase(id, userId));
     }
 
+    @PutMapping("/{id}")
+    public Result<KnowledgeBaseVO> updateKnowledgeBase(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateKBRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        return Result.success(knowledgeBaseService.updateKnowledgeBase(
+                id, request.getKbName(), request.getDescription(), request.getEmbeddingModel(), userId));
+    }
+
     @DeleteMapping("/{id}")
     public Result<Void> deleteKnowledgeBase(
             @PathVariable Long id,
@@ -73,14 +82,18 @@ public class KnowledgeBaseController {
     @PostMapping("/{kbCode}/retrieve")
     public Result<List<RAGService.RetrievalResult>> retrieve(
             @PathVariable String kbCode,
-            @Valid @RequestBody RetrieveRequest request) {
+            @Valid @RequestBody RetrieveRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        knowledgeBaseService.getKnowledgeBaseByCode(kbCode, userId);
         return Result.success(ragService.retrieve(kbCode, request.getQuery(), request.getTopK() != null ? request.getTopK() : 5));
     }
 
     @PostMapping("/{kbCode}/rag")
     public Result<RAGResponse> ragQuery(
             @PathVariable String kbCode,
-            @Valid @RequestBody RAGQueryRequest request) {
+            @Valid @RequestBody RAGQueryRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        knowledgeBaseService.getKnowledgeBaseByCode(kbCode, userId);
         List<RAGService.RetrievalResult> results = ragService.retrieve(kbCode, request.getQuery(),
                 request.getTopK() != null ? request.getTopK() : 5);
         String context = ragService.buildContext(results);
@@ -91,6 +104,13 @@ public class KnowledgeBaseController {
         response.setContext(context);
         response.setReferences(results);
         return Result.success(response);
+    }
+
+    @lombok.Data
+    public static class UpdateKBRequest {
+        private String kbName;
+        private String description;
+        private String embeddingModel;
     }
 
     @lombok.Data

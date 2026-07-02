@@ -9,6 +9,14 @@ export const createKnowledgeBase = (data: Partial<KnowledgeBase>) => {
   return request.post<KnowledgeBase>('/v1/knowledge-bases', data)
 }
 
+export const getKnowledgeBaseById = (id: number) => {
+  return request.get<KnowledgeBase>(`/v1/knowledge-bases/${id}`)
+}
+
+export const updateKnowledgeBase = (id: number, data: Partial<KnowledgeBase>) => {
+  return request.put<KnowledgeBase>(`/v1/knowledge-bases/${id}`, data)
+}
+
 export const deleteKnowledgeBase = (id: number) => {
   return request.delete(`/v1/knowledge-bases/${id}`)
 }

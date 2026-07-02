@@ -71,6 +71,39 @@ public class KnowledgeBaseService {
         return convertToBaseVO(kb);
     }
 
+    @Transactional
+    public KnowledgeBaseVO updateKnowledgeBase(Long id, String kbName, String description, String embeddingModel, Long userId) {
+        KnowledgeBase kb = kbMapper.selectById(id);
+        if (kb == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "知识库不存在");
+        }
+        if (!kb.getCreatedBy().equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "无权更新该知识库");
+        }
+        if (kbName != null) {
+            kb.setKbName(kbName);
+        }
+        if (description != null) {
+            kb.setDescription(description);
+        }
+        if (embeddingModel != null) {
+            kb.setEmbeddingModel(embeddingModel);
+        }
+        kbMapper.updateById(kb);
+        return convertToBaseVO(kb);
+    }
+
+    public KnowledgeBaseVO getKnowledgeBaseByCode(String kbCode, Long userId) {
+        KnowledgeBase kb = kbMapper.selectByCode(kbCode);
+        if (kb == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "知识库不存在");
+        }
+        if (!kb.getCreatedBy().equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "无权访问该知识库");
+        }
+        return convertToBaseVO(kb);
+    }
+
     public List<KnowledgeBaseVO> listKnowledgeBases(Long userId) {
         return kbMapper.selectByUserId(userId).stream()
                 .map(this::convertToBaseVO)
