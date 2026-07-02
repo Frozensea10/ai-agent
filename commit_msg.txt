@@ -1,7 +1,0 @@
-chore(db): introduce Flyway for database migrations
-
-- Add flyway-mysql dependency to ai-agent-user
-- Create V1__init_schema.sql from init-scripts/01-init-databases.sql
-- Keep only CREATE DATABASE statements in init-scripts for Docker first run
-- Enable Flyway in ai-agent-user application.yml with baseline-on-migrate
-- Disable Flyway in test application-test.yml for H2 compatibility
