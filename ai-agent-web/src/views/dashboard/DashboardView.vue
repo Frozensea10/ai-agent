@@ -304,14 +304,6 @@ import { ChatDotRound, Document, Setting, Tools, Star, Lightning } from '@elemen
   margin-top: 2px;
 }
 
-.deco-img {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  pointer-events: none;
-}
-
 .deco-sun {
   top: 0;
   right: 24px;
@@ -348,11 +340,6 @@ import { ChatDotRound, Document, Setting, Tools, Star, Lightning } from '@elemen
   }
 
   .deco-img {
-    width: 50px;
-    height: 50px;
-  }
-
-  .deco-cloud {
     display: none;
   }
 }

@@ -32,11 +32,16 @@
                 <span class="hand-tag small" :style="{ background: getAgentColor(agent.modelProvider) }">{{ agent.modelProvider }}</span>
               </div>
             </div>
-            <el-switch
-              :model-value="agent.status === 1"
-              active-color="#FF6B6B"
-              @change="(val: boolean) => toggleStatus(agent, val)"
-            />
+            <div class="agent-ops">
+              <button class="btn-pill btn-primary-pill edit-btn" @click="openEditAgent(agent)">
+                <el-icon><Edit /></el-icon> 编辑
+              </button>
+              <el-switch
+                :model-value="agent.status === 1"
+                active-color="#FF6B6B"
+                @change="(val: boolean) => toggleStatus(agent, val)"
+              />
+            </div>
           </div>
 
           <div class="agent-desc">{{ agent.description || '暂无描述' }}</div>
@@ -51,9 +56,6 @@
           </div>
 
           <div class="agent-actions">
-            <button class="btn-pill btn-primary-pill" style="padding: 8px 16px; font-size: 13px" @click="openEditAgent(agent)">
-              <el-icon><Edit /></el-icon> 编辑
-            </button>
             <button class="btn-pill btn-primary-pill" style="padding: 8px 16px; font-size: 13px; background: var(--teal); border-color: var(--teal)" @click="goChat(agent)">
               <el-icon><ChatDotRound /></el-icon> 对话
             </button>
@@ -348,6 +350,18 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.agent-ops {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.edit-btn {
+  padding: 8px 16px;
+  font-size: 13px;
 }
 
 .agent-avatar {

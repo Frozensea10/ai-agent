@@ -660,14 +660,6 @@ onMounted(() => {
   border: 2px solid var(--text-dark);
 }
 
-.deco-img {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  pointer-events: none;
-}
-
 .deco-rocket {
   bottom: 24px;
   right: 24px;
@@ -702,7 +694,7 @@ onMounted(() => {
     font-size: 24px;
   }
 
-  .deco-rocket {
+  .deco-img {
     display: none;
   }
 }

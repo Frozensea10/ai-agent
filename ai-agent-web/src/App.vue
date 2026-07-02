@@ -122,6 +122,19 @@ body {
 .animate-typing { animation: typing 1s ease-in-out infinite; }
 
 /* Cute floating illustration for pages */
+.deco-img {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  opacity: 0.35;
+  border-radius: 50%;
+  border: 3px solid var(--text-dark);
+  box-shadow: 3px 3px 0 rgba(45, 52, 54, 0.15);
+}
+
 .page-deco-img {
   position: absolute;
   pointer-events: none;
@@ -134,6 +147,7 @@ body {
 }
 
 @media (max-width: 767px) {
+  .deco-img,
   .page-deco-img { display: none; }
 }
 
@@ -480,5 +494,6 @@ body {
 /* Responsive helpers */
 @media (max-width: 767px) {
   .hand-input { font-size: 16px; }
+  .deco-img { display: none; }
 }
 </style>

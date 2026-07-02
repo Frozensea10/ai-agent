@@ -105,8 +105,7 @@
       </template>
     </el-dialog>
 
-    <img src="/assets/cute-planet.jpg" class="deco-img deco-planet" alt="planet" />
-    <img src="/assets/cute-moon.jpg" class="deco-img deco-moon" alt="moon" />
+
   </div>
 </template>
 

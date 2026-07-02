@@ -64,9 +64,6 @@
       <span>创建一个，开始积累智慧吧</span>
     </div>
 
-    <img src="/assets/cute-rocket.jpg" class="deco-img deco-rocket" alt="rocket" />
-    <img src="/assets/cute-cloud.jpg" class="deco-img deco-cloud" alt="cloud" />
-
     <!-- 创建知识库对话框 -->
     <el-dialog v-model="showCreateDialog" title="创建知识库" width="500px" class="cute-dialog">
       <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="100px">
@@ -533,14 +530,6 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.deco-img {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  pointer-events: none;
-}
-
 .deco-rocket {
   top: 20px;
   right: 24px;
@@ -562,8 +551,7 @@ onMounted(() => {
     font-size: 24px;
   }
 
-  .deco-rocket,
-  .deco-cloud {
+  .deco-img {
     display: none;
   }
 }

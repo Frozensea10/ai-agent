@@ -345,6 +345,7 @@ const handleCommand = (command: string) => {
   background: var(--cream);
   position: relative;
   min-height: calc(100vh - 64px);
+  z-index: 1;
 }
 
 .sidebar-backdrop {

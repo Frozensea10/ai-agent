@@ -245,7 +245,7 @@ const savePreferences = () => {
 .settings-view {
   padding: 24px;
   position: relative;
-  min-height: 100%;
+  min-height: calc(100vh - 112px);
 }
 
 .page-header {
@@ -481,14 +481,6 @@ const savePreferences = () => {
   font-family: 'Nunito', sans-serif;
 }
 
-.deco-img {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  pointer-events: none;
-}
-
 .deco-moon {
   top: 20px;
   right: 24px;
@@ -534,8 +526,7 @@ const savePreferences = () => {
     padding: 20px;
   }
 
-  .deco-moon,
-  .deco-cloud {
+  .deco-img {
     display: none;
   }
 }
