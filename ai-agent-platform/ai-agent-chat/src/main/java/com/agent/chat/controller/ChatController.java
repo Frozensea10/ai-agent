@@ -3,10 +3,10 @@ package com.agent.chat.controller;
 import com.agent.chat.dto.CreateSessionRequest;
 import com.agent.chat.dto.SendMessageRequest;
 import com.agent.chat.dto.SSEMessage;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agent.chat.entity.ChatMessage;
 import com.agent.chat.entity.ChatSession;
 import com.agent.chat.feign.AgentFeignClient;
+import com.agent.chat.feign.KnowledgeFeignClient;
 import com.agent.chat.llm.ChatLLMService;
 import com.agent.chat.memory.ChatMemoryProvider;
 import com.agent.chat.service.MessageService;
@@ -18,6 +18,7 @@ import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
 import com.agent.common.result.Result;
 import com.agent.core.llm.service.LLMService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import jakarta.validation.Valid;
@@ -45,6 +46,7 @@ public class ChatController {
     private final ChatLLMService chatLLMService;
     private final LLMService llmService;
     private final AgentFeignClient agentFeignClient;
+    private final KnowledgeFeignClient knowledgeFeignClient;
     private final ChatMemoryProvider chatMemoryProvider;
 
     private final ObjectMapper objectMapper;
@@ -89,6 +91,8 @@ public class ChatController {
         sessionService.getSession(sessionId, userId);
 
         AgentConfigDTO agent = resolveAgent(request.getAgentId());
+        String kbCode = request.getKbCode();
+        String ragContext = retrieveRagContext(kbCode, request.getContent(), userId);
 
         messageService.saveUserMessage(sessionId, request.getContent());
 
@@ -103,6 +107,7 @@ public class ChatController {
                 sessionId,
                 request.getContent(),
                 agent.getSystemPrompt(),
+                ragContext,
                 agent.getMemoryType(),
                 agent.getMemoryMaxMessages(),
                 chatModel
@@ -121,11 +126,13 @@ public class ChatController {
             @PathVariable @NotBlank String sessionId,
             @RequestParam @NotBlank String content,
             @RequestParam @NotNull Long agentId,
+            @RequestParam(required = false) String kbCode,
             @RequestHeader(HEADER_USER_ID) Long userId) {
         try {
             sessionService.getSession(sessionId, userId);
 
             AgentConfigDTO agent = resolveAgent(agentId);
+            String ragContext = retrieveRagContext(kbCode, content, userId);
 
             StreamingChatModel streamingModel = llmService.createStreamingModel(
                     agent.getModelProvider(),
@@ -140,6 +147,7 @@ public class ChatController {
                     sessionId,
                     content,
                     agent.getSystemPrompt(),
+                    ragContext,
                     agent.getMemoryType(),
                     agent.getMemoryMaxMessages(),
                     streamingModel,
@@ -169,18 +177,53 @@ public class ChatController {
         return agentResult.getData();
     }
 
+    private String retrieveRagContext(String kbCode, String query, Long userId) {
+        if (kbCode == null || kbCode.isBlank()) {
+            return null;
+        }
+        try {
+            KnowledgeFeignClient.RAGQueryRequest request = new KnowledgeFeignClient.RAGQueryRequest();
+            request.setQuery(query);
+            request.setTopK(5);
+            Result<KnowledgeFeignClient.RAGResponse> result = knowledgeFeignClient.ragQuery(kbCode, request);
+            if (result != null && result.isSuccess() && result.getData() != null) {
+                return result.getData().getContext();
+            }
+            log.warn("RAG 检索未返回有效结果: kbCode={}", kbCode);
+        } catch (Exception e) {
+            log.error("RAG 检索失败: kbCode={}, query={}", kbCode, query, e);
+        }
+        return null;
+    }
+
     private ChatSessionVO convertToSessionVO(ChatSession session) {
         ChatSessionVO vo = new ChatSessionVO();
         vo.setId(session.getId());
         vo.setSessionId(session.getSessionId());
         vo.setAgentId(session.getAgentId());
         vo.setKbId(session.getKbId());
+        vo.setKbCode(resolveKbCode(session.getKbId()));
         vo.setSessionTitle(session.getSessionTitle());
         vo.setMessageCount(session.getMessageCount());
         vo.setStatus(session.getStatus());
         vo.setCreatedAt(session.getCreatedAt());
         vo.setUpdatedAt(session.getUpdatedAt());
         return vo;
+    }
+
+    private String resolveKbCode(Long kbId) {
+        if (kbId == null) {
+            return null;
+        }
+        try {
+            Result<KnowledgeFeignClient.KnowledgeBaseVO> result = knowledgeFeignClient.getKnowledgeBaseById(kbId);
+            if (result != null && result.isSuccess() && result.getData() != null) {
+                return result.getData().getKbCode();
+            }
+        } catch (Exception e) {
+            log.warn("查询知识库编码失败: kbId={}", kbId, e);
+        }
+        return null;
     }
 
     private ChatMessageVO convertToMessageVO(ChatMessage message) {

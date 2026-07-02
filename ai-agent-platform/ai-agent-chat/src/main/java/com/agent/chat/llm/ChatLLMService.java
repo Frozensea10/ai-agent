@@ -43,13 +43,14 @@ public class ChatLLMService {
     private static final TypeReference<Map<String, Object>> MAP_TYPE_REFERENCE = new TypeReference<>() {};
 
     public String chat(String sessionId, String message, String systemPrompt,
-                       String memoryType, Integer maxMessages,
+                       String ragContext, String memoryType, Integer maxMessages,
                        ChatModel chatModel) {
         chatMemoryProvider.addUserMessage(sessionId, memoryType, maxMessages, message);
         List<ChatMessage> history = chatMemoryProvider.getMessages(sessionId, memoryType, maxMessages);
 
-        if (systemPrompt != null && !systemPrompt.isBlank()) {
-            history.add(0, SystemMessage.from(systemPrompt));
+        String prompt = buildSystemPrompt(systemPrompt, ragContext);
+        if (prompt != null && !prompt.isBlank()) {
+            history.add(0, SystemMessage.from(prompt));
         }
 
         ChatResponse response = chatModel.chat(history);
@@ -62,7 +63,7 @@ public class ChatLLMService {
     }
 
     public Flux<String> streamChat(String sessionId, String message, String systemPrompt,
-                                   String memoryType, Integer maxMessages,
+                                   String ragContext, String memoryType, Integer maxMessages,
                                    StreamingChatModel streamingModel,
                                    String modelName) {
         Sinks.Many<String> sink = Sinks.many().unicast().onBackpressureBuffer();
@@ -79,8 +80,9 @@ public class ChatLLMService {
         chatMemoryProvider.addUserMessage(sessionId, memoryType, maxMessages, message);
         List<ChatMessage> history = chatMemoryProvider.getMessages(sessionId, memoryType, maxMessages);
 
-        if (systemPrompt != null && !systemPrompt.isBlank()) {
-            history.add(0, SystemMessage.from(systemPrompt));
+        String prompt = buildSystemPrompt(systemPrompt, ragContext);
+        if (prompt != null && !prompt.isBlank()) {
+            history.add(0, SystemMessage.from(prompt));
         }
 
         streamingModel.chat(history, new StreamingChatResponseHandler() {
@@ -237,6 +239,23 @@ public class ChatLLMService {
                 ? toolResult.getData().getErrorMessage()
                 : "未知错误";
         return "{\"error\":\"" + errorMessage + "\"}";
+    }
+
+    private String buildSystemPrompt(String systemPrompt, String ragContext) {
+        if ((systemPrompt == null || systemPrompt.isBlank()) && (ragContext == null || ragContext.isBlank())) {
+            return null;
+        }
+        StringBuilder prompt = new StringBuilder();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            prompt.append(systemPrompt);
+        }
+        if (ragContext != null && !ragContext.isBlank()) {
+            if (prompt.length() > 0) {
+                prompt.append("\n\n");
+            }
+            prompt.append("以下是与用户问题相关的参考信息:\n\n").append(ragContext).append("\n\n请基于以上参考信息回答用户问题。如果参考信息不足以回答问题，请明确说明。");
+        }
+        return prompt.toString();
     }
 
     private String toJson(SSEMessage message) {

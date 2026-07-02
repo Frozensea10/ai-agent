@@ -3,6 +3,7 @@ export interface ChatSession {
   sessionId: string
   agentId: number
   kbId?: number
+  kbCode?: string
   sessionTitle: string
   messageCount: number
   status: number
@@ -30,6 +31,7 @@ export interface CreateSessionForm {
 export interface SendMessageForm {
   agentId: number
   kbId?: number
+  kbCode?: string
   content: string
   sessionId?: string
 }

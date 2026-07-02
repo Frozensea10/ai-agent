@@ -28,10 +28,14 @@ export function streamChat(
   onStart: (messageId: string) => void,
   onChunk: (chunk: string) => void,
   onDone: () => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  kbCode?: string
 ): () => void {
   const token = localStorage.getItem('token') || ''
-  const url = `/api/v1/sessions/${sessionId}/stream?content=${encodeURIComponent(content)}&agentId=${agentId}`
+  let url = `/api/v1/sessions/${sessionId}/stream?content=${encodeURIComponent(content)}&agentId=${agentId}`
+  if (kbCode) {
+    url += `&kbCode=${encodeURIComponent(kbCode)}`
+  }
 
   const controller = new AbortController()
 

@@ -15,5 +15,7 @@ public class SendMessageRequest {
 
     private Long kbId;
 
+    private String kbCode;
+
     private String sessionId;
 }

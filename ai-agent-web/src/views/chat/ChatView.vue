@@ -31,7 +31,10 @@
           <button class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen">
             <el-icon><Menu /></el-icon>
           </button>
-          <h3>{{ currentSession?.sessionTitle || '新对话' }}</h3>
+          <div class="header-title">
+            <h3>{{ currentSession?.sessionTitle || '新对话' }}</h3>
+            <span v-if="currentSession?.kbCode" class="kb-tag">KB: {{ currentSession.kbCode }}</span>
+          </div>
         </div>
 
         <div class="chat-messages" ref="messagesRef">
@@ -241,7 +244,8 @@ const sendMessage = async () => {
       aiMsg.content += `\n[错误: ${error}]`
       ElMessage.error(error)
       nextTick(scrollToBottom)
-    }
+    },
+    currentSession.value?.kbCode
   )
 }
 
@@ -365,6 +369,21 @@ onMounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 800;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kb-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--teal);
+  color: var(--text-dark);
+  font-weight: 600;
 }
 
 .sidebar-toggle {

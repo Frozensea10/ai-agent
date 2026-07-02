@@ -11,6 +11,7 @@ public class ChatSessionVO {
     private String sessionId;
     private Long agentId;
     private Long kbId;
+    private String kbCode;
     private String sessionTitle;
     private Integer messageCount;
     private Integer status;
