@@ -17,6 +17,8 @@ spring:
       mode: always
       schema-locations: classpath:db/schema.sql
       data-locations: classpath:db/data.sql
+  flyway:
+    enabled: false
 
 jwt:
   secret: ${JWT_SECRET:TestSecretKeyForAiAgentPlatform2026!@#$}

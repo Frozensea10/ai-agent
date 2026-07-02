@@ -15,6 +15,9 @@ spring:
     username: ai_agent
     password: ${MYSQL_PASSWORD:ai_agent123}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
   data:
     redis:
       host: localhost
