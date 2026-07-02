@@ -20,14 +20,19 @@ buildNumber.properties
 *.swp
 *.swo
 *~
+.classpath
+.project
+.settings/
 
 # Logs
 logs/
 *.log
+*.log.*
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Node.js
 node_modules/
@@ -48,8 +53,11 @@ application-dev-local.yml
 # Temporary files
 *.tmp
 *.temp
+*.pid
+*.seed
+*.pid.lock
 
-# Screenshots and generated data
+# Screenshots and generated data from manual testing
 chat.png
 agent.png
 *_response.json
@@ -72,3 +80,6 @@ screenshots/
 .agent-browser/
 .chrome-debug/
 browser-data/
+
+# Upload / cache / embedded runtime artifacts
+.uploads/
