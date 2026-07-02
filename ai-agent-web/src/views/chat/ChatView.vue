@@ -4,7 +4,7 @@
       <div class="chat-sidebar" :class="{ open: sidebarOpen }">
         <div class="sidebar-header">
           <h3>会话列表</h3>
-          <button class="btn-pill btn-primary-pill new-chat-btn" :disabled="loading" @click="createNewChat">
+          <button class="btn-pill btn-primary-pill new-chat-btn" :disabled="loading" @click="openNewChatDialog">
             <el-icon><Plus /></el-icon> 新对话
           </button>
         </div>
@@ -19,6 +19,7 @@
           >
             <el-icon><ChatSquare /></el-icon>
             <span class="session-title">{{ session.sessionTitle || '未命名会话' }}</span>
+            <span v-if="session.kbCode" class="session-kb-tag">KB</span>
             <span class="session-time">{{ formatTime(session.updatedAt) }}</span>
             <el-icon class="delete-icon" @click.stop="handleDeleteSession(session.sessionId)"><Delete /></el-icon>
           </div>
@@ -83,6 +84,27 @@
       </div>
     </div>
 
+    <el-dialog v-model="newChatDialogVisible" title="新建对话" width="420px">
+      <div class="new-chat-form">
+        <el-input v-model="newChatTitle" placeholder="请输入对话标题" />
+        <el-select v-model="newChatKbId" placeholder="选择知识库" clearable>
+          <el-option label="不使用知识库" :value="undefined" />
+          <el-option
+            v-for="kb in knowledgeBases"
+            :key="kb.id"
+            :label="kb.kbName"
+            :value="kb.id"
+          />
+        </el-select>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="newChatDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmCreateNewChat">确认</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <img src="/assets/cute-planet.jpg" class="deco-img deco-planet" alt="planet" />
     <img src="/assets/cute-moon.jpg" class="deco-img deco-moon" alt="moon" />
   </div>
@@ -93,7 +115,9 @@ import { ref, nextTick, computed, onMounted } from 'vue'
 import { ChatDotRound, User, Promotion, Plus, ChatSquare, Menu, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listSessions, createSession, deleteSession, getMessages, streamChat } from '@/api/chat'
+import { getKnowledgeBases } from '@/api/knowledge'
 import type { ChatSession, ChatMessage } from '@/types/chat'
+import type { KnowledgeBase } from '@/types/knowledge'
 
 const DEFAULT_AGENT_ID = 1
 
@@ -105,6 +129,10 @@ const loading = ref(false)
 const messagesRef = ref<HTMLDivElement>()
 const sidebarOpen = ref(false)
 const abortFn = ref<(() => void) | null>(null)
+const knowledgeBases = ref<KnowledgeBase[]>([])
+const newChatDialogVisible = ref(false)
+const newChatTitle = ref('新对话')
+const newChatKbId = ref<number | undefined>(undefined)
 
 const currentSession = computed(() => {
   return chatSessions.value.find((s) => s.sessionId === currentSessionId.value)
@@ -157,19 +185,37 @@ const loadMessages = async (sessionId: string) => {
   }
 }
 
+const loadKnowledgeBases = async () => {
+  try {
+    const res = await getKnowledgeBases()
+    knowledgeBases.value = res.data || []
+  } catch (e) {
+    ElMessage.error('加载知识库列表失败')
+  }
+}
+
 const selectSession = async (sessionId: string) => {
   currentSessionId.value = sessionId
   sidebarOpen.value = false
   await loadMessages(sessionId)
 }
 
-const createNewChat = async () => {
+const openNewChatDialog = () => {
+  newChatTitle.value = '新对话'
+  newChatKbId.value = undefined
+  newChatDialogVisible.value = true
+}
+
+const confirmCreateNewChat = async () => {
+  const title = newChatTitle.value.trim() || '新对话'
+  const kbId = newChatKbId.value
   try {
-    const data = await createSession({ agentId: DEFAULT_AGENT_ID, title: '新对话' })
+    const data = await createSession({ agentId: DEFAULT_AGENT_ID, title, kbId })
     chatSessions.value.unshift(data)
     currentSessionId.value = data.sessionId
     messages.value = []
     sidebarOpen.value = false
+    newChatDialogVisible.value = false
   } catch (e) {
     ElMessage.error('创建会话失败')
   }
@@ -193,7 +239,7 @@ const handleDeleteSession = async (sessionId: string) => {
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || sending.value) return
   if (!currentSessionId.value) {
-    await createNewChat()
+    await createSession({ agentId: DEFAULT_AGENT_ID, title: '新对话' })
     if (!currentSessionId.value) return
   }
 
@@ -251,6 +297,7 @@ const sendMessage = async () => {
 
 onMounted(() => {
   loadSessions()
+  loadKnowledgeBases()
 })
 </script>
 
@@ -328,6 +375,15 @@ onMounted(() => {
   white-space: nowrap;
   font-weight: 600;
   font-size: 14px;
+}
+
+.session-kb-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--coral);
+  color: white;
+  font-weight: 700;
 }
 
 .session-time {
@@ -498,6 +554,18 @@ onMounted(() => {
 .hint {
   font-size: 12px;
   color: #888;
+}
+
+.new-chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 @media (max-width: 768px) {

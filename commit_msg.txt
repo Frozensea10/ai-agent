@@ -1,0 +1,6 @@
+feat(chat): allow selecting knowledge base when creating a new chat session
+
+- Load knowledge base list in ChatView on mount
+- Add a dialog to input session title and select a knowledge base
+- Pass selected kbId to createSession API
+- Show KB indicator in sidebar and header for sessions with kbCode
