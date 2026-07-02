@@ -4,15 +4,25 @@ import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
 import com.agent.file.config.MinioConfig;
 import io.minio.GetObjectArgs;
+import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
+import io.minio.Result;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
 import io.minio.http.Method;
+import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -25,6 +35,7 @@ public class FileService {
     private final MinioConfig minioConfig;
 
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
+    private static final int MAX_LIST_LIMIT = 1000;
 
     public String upload(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -69,7 +80,7 @@ public class FileService {
                             .build()
             );
         } catch (Exception e) {
-            log.error("文件下载失败", e);
+            log.error("文件下载失败, objectName={}", objectName, e);
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "文件不存在或下载失败");
         }
     }
@@ -88,6 +99,74 @@ public class FileService {
         } catch (Exception e) {
             log.error("生成文件访问链接失败", e);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "生成文件访问链接失败");
+        }
+    }
+
+    public List<String> listObjects() {
+        ensureBucketExists();
+        List<String> objectNames = new ArrayList<>();
+        try {
+            Iterable<Result<Item>> results = minioClient.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(minioConfig.getBucketName())
+                            .maxKeys(MAX_LIST_LIMIT)
+                            .build()
+            );
+            int count = 0;
+            for (Result<Item> result : results) {
+                if (count >= MAX_LIST_LIMIT) {
+                    break;
+                }
+                Item item = result.get();
+                objectNames.add(item.objectName());
+                count++;
+            }
+            return objectNames;
+        } catch (Exception e) {
+            log.error("文件列表查询失败", e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "文件列表查询失败: " + e.getMessage());
+        }
+    }
+
+    public void deleteObject(String objectName) {
+        if (objectName == null || objectName.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "对象名称不能为空");
+        }
+        ensureBucketExists();
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(minioConfig.getBucketName())
+                            .object(objectName)
+                            .build()
+            );
+        } catch (Exception e) {
+            log.error("文件删除失败, objectName={}", objectName, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "文件删除失败: " + e.getMessage());
+        }
+    }
+
+    public Map<String, Object> getObjectInfo(String objectName) {
+        if (objectName == null || objectName.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "对象名称不能为空");
+        }
+        ensureBucketExists();
+        try {
+            StatObjectResponse stat = minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(minioConfig.getBucketName())
+                            .object(objectName)
+                            .build()
+            );
+            Map<String, Object> info = new HashMap<>();
+            info.put("objectName", stat.object());
+            info.put("size", stat.size());
+            info.put("contentType", stat.contentType());
+            info.put("lastModified", stat.lastModified());
+            return info;
+        } catch (Exception e) {
+            log.error("获取文件信息失败, objectName={}", objectName, e);
+            throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "文件不存在或获取信息失败");
         }
     }
 

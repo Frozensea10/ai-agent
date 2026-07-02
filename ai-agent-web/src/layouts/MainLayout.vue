@@ -89,7 +89,8 @@ import {
   Star,
   Expand,
   Fold,
-  SwitchButton
+  SwitchButton,
+  Folder
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -102,6 +103,7 @@ const menuItems = [
   { path: '/dashboard', title: '首页', icon: HomeFilled },
   { path: '/chat', title: '对话', icon: ChatDotRound },
   { path: '/knowledge', title: '知识库', icon: Document },
+  { path: '/file', title: '文件管理', icon: Folder },
   { path: '/agent', title: 'Agent 配置', icon: Setting },
   { path: '/mcp', title: 'MCP 工具', icon: Connection },
   { path: '/settings', title: '设置', icon: Tools }

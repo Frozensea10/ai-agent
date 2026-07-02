@@ -45,6 +45,12 @@ const routes = [
         meta: { title: 'MCP 工具' }
       },
       {
+        path: 'file',
+        name: 'File',
+        component: () => import('@/views/file/FileView.vue'),
+        meta: { title: '文件管理' }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/settings/SettingsView.vue'),

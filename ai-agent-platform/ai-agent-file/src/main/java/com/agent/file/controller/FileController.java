@@ -1,5 +1,7 @@
 package com.agent.file.controller;
 
+import com.agent.common.exception.BusinessException;
+import com.agent.common.exception.ErrorCode;
 import com.agent.common.result.Result;
 import com.agent.file.service.FileService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -11,6 +13,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -22,8 +28,27 @@ public class FileController {
 
     @PostMapping("/upload")
     public Result<String> upload(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "上传文件不能为空");
+        }
         String objectName = fileService.upload(file);
         return Result.success(objectName);
+    }
+
+    @GetMapping
+    public Result<List<Map<String, Object>>> listFiles() {
+        List<String> objectNames = fileService.listObjects();
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (String objectName : objectNames) {
+            try {
+                Map<String, Object> info = fileService.getObjectInfo(objectName);
+                info.put("url", fileService.getPreviewUrl(objectName));
+                list.add(info);
+            } catch (Exception e) {
+                log.warn("获取文件信息失败, objectName={}", objectName, e);
+            }
+        }
+        return Result.success(list);
     }
 
     @GetMapping("/{objectName}")
@@ -31,9 +56,19 @@ public class FileController {
             @PathVariable String objectName,
             @RequestParam(required = false, defaultValue = "inline") String disposition,
             HttpServletResponse response) {
+        if (objectName == null || objectName.isBlank()) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
         try {
-            String contentType = fileService.detectContentType(objectName);
+            Map<String, Object> info = fileService.getObjectInfo(objectName);
+            Long size = info.get("size") instanceof Number ? ((Number) info.get("size")).longValue() : null;
+            String contentType = info.get("contentType") instanceof String ? (String) info.get("contentType") : fileService.detectContentType(objectName);
+
             response.setContentType(contentType);
+            if (size != null && size > 0) {
+                response.setContentLengthLong(size);
+            }
             response.setHeader("Content-Disposition", disposition + "; filename=\"" + URLEncoder.encode(objectName, StandardCharsets.UTF_8) + "\"");
 
             try (InputStream is = fileService.download(objectName)) {
@@ -44,10 +79,25 @@ public class FileController {
                 }
                 response.getOutputStream().flush();
             }
+        } catch (BusinessException e) {
+            if (e.getCode() == ErrorCode.NOT_FOUND.getCode()) {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            } else {
+                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            }
         } catch (Exception e) {
-            log.error("文件下载异常", e);
+            log.error("文件下载异常, objectName={}", objectName, e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    @DeleteMapping("/{objectName}")
+    public Result<Void> delete(@PathVariable String objectName) {
+        if (objectName == null || objectName.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "对象名称不能为空");
+        }
+        fileService.deleteObject(objectName);
+        return Result.success();
     }
 
     @GetMapping("/{objectName}/url")

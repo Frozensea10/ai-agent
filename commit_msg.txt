@@ -1,0 +1,8 @@
+feat(file): add full file management backend and frontend page
+
+- Add list/delete endpoints and improve download in FileController
+- Add listObjects, deleteObject, getObjectInfo helpers in FileService
+- Create frontend api/file.ts with upload, download, preview, delete
+- Create FileView.vue with upload, list, preview, download, delete
+- Register /file route and add menu item in MainLayout
+- Fix router formatting by restoring settings route
