@@ -1,0 +1,4 @@
+fix(mcp): remove duplicated /api prefix in MCP API paths
+
+- request.ts already uses baseURL '/api', so API modules should use '/v1/...'
+- Replace all '/api/v1/mcp' with '/v1/mcp' in api/mcp.ts

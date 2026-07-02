@@ -27,33 +27,33 @@ export interface ToolExecuteResult {
 }
 
 export function listTools(): Promise<Result<ToolInfo[]>> {
-  return request.get('/api/v1/mcp/tools') as Promise<Result<ToolInfo[]>>
+  return request.get('/v1/mcp/tools') as Promise<Result<ToolInfo[]>>
 }
 
 export function listMcpServers(): Promise<Result<McpServer[]>> {
-  return request.get('/api/v1/mcp/servers') as Promise<Result<McpServer[]>>
+  return request.get('/v1/mcp/servers') as Promise<Result<McpServer[]>>
 }
 
 export function createMcpServer(data: McpServer): Promise<Result<McpServer>> {
-  return request.post('/api/v1/mcp/servers', data) as Promise<Result<McpServer>>
+  return request.post('/v1/mcp/servers', data) as Promise<Result<McpServer>>
 }
 
 export function updateMcpServer(id: number, data: McpServer): Promise<Result<void>> {
-  return request.put(`/api/v1/mcp/servers/${id}`, data) as Promise<Result<void>>
+  return request.put(`/v1/mcp/servers/${id}`, data) as Promise<Result<void>>
 }
 
 export function deleteMcpServer(id: number): Promise<Result<void>> {
-  return request.delete(`/api/v1/mcp/servers/${id}`) as Promise<Result<void>>
+  return request.delete(`/v1/mcp/servers/${id}`) as Promise<Result<void>>
 }
 
 export function updateMcpServerStatus(id: number, status: string): Promise<Result<void>> {
-  return request.put(`/api/v1/mcp/servers/${id}/status`, { status }) as Promise<Result<void>>
+  return request.put(`/v1/mcp/servers/${id}/status`, { status }) as Promise<Result<void>>
 }
 
 export function getServerConnectionStatus(): Promise<Result<Record<string, string>>> {
-  return request.get('/api/v1/mcp/servers/status') as Promise<Result<Record<string, string>>>
+  return request.get('/v1/mcp/servers/status') as Promise<Result<Record<string, string>>>
 }
 
 export function executeTool(toolCode: string, parameters: Record<string, any>): Promise<Result<ToolExecuteResult>> {
-  return request.post(`/api/v1/mcp/tools/${toolCode}/execute`, parameters) as Promise<Result<ToolExecuteResult>>
+  return request.post(`/v1/mcp/tools/${toolCode}/execute`, parameters) as Promise<Result<ToolExecuteResult>>
 }
