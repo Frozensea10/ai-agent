@@ -147,6 +147,62 @@
           </el-form>
         </div>
 
+        <div v-if="activeTab === 'models'" class="settings-section">
+          <div class="section-title">
+            <span class="title-dot" style="background: var(--mint)"></span>
+            <h3>模型配置</h3>
+          </div>
+
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 20px;"
+          >
+            配置各模型提供商的 API Key 后，即可在对话中使用对应模型。
+          </el-alert>
+
+          <div class="provider-cards">
+            <div
+              v-for="provider in modelProviders"
+              :key="provider.providerName"
+              class="provider-card"
+            >
+              <div class="provider-header">
+                <div class="provider-name">{{ providerLabel(provider.providerName) }}</div>
+                <el-switch
+                  v-model="provider.enabled"
+                  :active-value="1"
+                  :inactive-value="0"
+                  active-color="#FF6B6B"
+                />
+              </div>
+
+              <el-form label-width="90px" class="settings-form">
+                <el-form-item label="API Key">
+                  <el-input
+                    v-model="provider.apiKey"
+                    type="password"
+                    show-password
+                    placeholder="sk-..."
+                  />
+                </el-form-item>
+                <el-form-item label="模型名称">
+                  <el-input
+                    v-model="provider.modelName"
+                    placeholder="可选，留空使用默认模型"
+                  />
+                </el-form-item>
+                <el-form-item>
+                  <button class="btn-pill btn-primary-pill" type="button" @click="saveProvider(provider)">
+                    保存
+                  </button>
+                </el-form-item>
+              </el-form>
+            </div>
+          </div>
+        </div>
+
         <div v-if="activeTab === 'about'" class="settings-section">
           <div class="section-title">
             <span class="title-dot" style="background: var(--mint)"></span>
@@ -178,19 +234,71 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { User, Lock, Bell, Setting, Star, InfoFilled } from '@element-plus/icons-vue'
+import { User, Lock, Bell, Setting, Star, InfoFilled, Cpu } from '@element-plus/icons-vue'
+import { listModelProviders, saveModelProvider, type LlmProviderConfig } from '@/api/settings'
 
 const activeTab = ref('profile')
 
 const settingTabs = [
   { key: 'profile', label: '个人资料', icon: User },
   { key: 'account', label: '账号安全', icon: Lock },
+  { key: 'models', label: '模型配置', icon: Cpu },
   { key: 'notifications', label: '通知设置', icon: Bell },
   { key: 'preferences', label: '系统偏好', icon: Setting },
   { key: 'about', label: '关于', icon: InfoFilled }
 ]
+
+const modelProviderNames = ['openai', 'deepseek', 'qwen', 'anthropic']
+
+const modelProviders = reactive<LlmProviderConfig[]>([])
+
+const loadModelProviders = async () => {
+  try {
+    const list = await listModelProviders()
+    const map = new Map(list.map(item => [item.providerName, item]))
+    modelProviders.splice(0, modelProviders.length)
+    for (const name of modelProviderNames) {
+      const existing = map.get(name)
+      modelProviders.push({
+        providerName: name,
+        apiKey: existing?.apiKey || '',
+        modelName: existing?.modelName || '',
+        enabled: existing?.enabled ?? 1
+      })
+    }
+  } catch (error) {
+    ElMessage.error('加载模型配置失败')
+  }
+}
+
+const providerLabel = (name: string) => {
+  const labels: Record<string, string> = {
+    openai: 'OpenAI',
+    deepseek: 'DeepSeek',
+    qwen: '通义千问',
+    anthropic: 'Anthropic'
+  }
+  return labels[name] || name
+}
+
+const saveProvider = async (provider: LlmProviderConfig) => {
+  if (!provider.apiKey || !provider.apiKey.trim()) {
+    ElMessage.warning('请输入 API Key')
+    return
+  }
+  try {
+    await saveModelProvider({ ...provider, apiKey: provider.apiKey.trim() })
+    ElMessage.success(`${providerLabel(provider.providerName)} 配置已保存`)
+  } catch (error) {
+    ElMessage.error('保存失败')
+  }
+}
+
+onMounted(() => {
+  loadModelProviders()
+})
 
 const profileForm = reactive({
   username: 'Admin',
@@ -493,7 +601,42 @@ const savePreferences = () => {
   animation: drift 6s ease-in-out infinite;
 }
 
+.provider-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.provider-card {
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--cream);
+  border: 2px solid var(--text-dark);
+  transition: transform 0.2s ease;
+}
+
+.provider-card:hover {
+  transform: translateY(-2px);
+}
+
+.provider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.provider-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
 @media (max-width: 1024px) {
+  .provider-cards {
+    grid-template-columns: 1fr;
+  }
+
   .settings-layout {
     flex-direction: column;
   }

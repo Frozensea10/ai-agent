@@ -7,9 +7,9 @@ public interface ModelAdapter {
 
     String getProvider();
 
-    ChatModel createChatModel(String modelName, Double temperature, Integer maxTokens);
+    ChatModel createChatModel(String apiKey, String modelName, Double temperature, Integer maxTokens);
 
-    StreamingChatModel createStreamingModel(String modelName, Double temperature, Integer maxTokens);
+    StreamingChatModel createStreamingModel(String apiKey, String modelName, Double temperature, Integer maxTokens);
 
     default boolean isConfigured() {
         return true;

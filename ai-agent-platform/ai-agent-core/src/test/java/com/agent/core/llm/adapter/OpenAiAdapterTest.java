@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class OpenAiAdapterTest {
 
-    private final OpenAiAdapter adapter = new OpenAiAdapter("test-api-key");
+    private final OpenAiAdapter adapter = new OpenAiAdapter();
 
     @Test
     @DisplayName("返回正确的 provider")

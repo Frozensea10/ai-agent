@@ -3,6 +3,7 @@ package com.agent.core.llm.service;
 import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
 import com.agent.core.llm.adapter.ModelAdapter;
+import com.agent.core.service.LlmProviderConfigService;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class LLMService implements ApplicationRunner {
     private static final String CACHE_KEY_FORMAT = "%s:%s:%s:%s";
 
     private final Map<String, ModelAdapter> modelAdapterMap;
+    private final LlmProviderConfigService llmProviderConfigService;
     private final Map<String, ChatModel> chatModelCache = new ConcurrentHashMap<>();
     private final Map<String, StreamingChatModel> streamingModelCache = new ConcurrentHashMap<>();
 
@@ -46,13 +48,14 @@ public class LLMService implements ApplicationRunner {
         for (Map.Entry<String, ModelAdapter> entry : modelAdapterMap.entrySet()) {
             String provider = entry.getKey();
             ModelAdapter adapter = entry.getValue();
-            if (!adapter.isConfigured()) {
+            String apiKey = getApiKey(provider);
+            if (!isApiKeyConfigured(apiKey)) {
                 providerAvailability.put(provider, false);
                 log.warn("⚠️ 模型提供商 [{}] API key 未配置，跳过网络可用性检测", provider);
                 continue;
             }
             try {
-                ChatModel testModel = adapter.createChatModel(null, HEALTH_CHECK_TEMPERATURE, HEALTH_CHECK_MAX_TOKENS);
+                ChatModel testModel = adapter.createChatModel(apiKey, null, HEALTH_CHECK_TEMPERATURE, HEALTH_CHECK_MAX_TOKENS);
                 String response = testModel.chat("Hello");
                 providerAvailability.put(provider, true);
                 log.info("✅ 模型提供商 [{}] 可用", provider);
@@ -69,7 +72,7 @@ public class LLMService implements ApplicationRunner {
         String cacheKey = buildCacheKey(provider, modelName, temperature, maxTokens);
         return chatModelCache.computeIfAbsent(cacheKey, k -> {
             ModelAdapter adapter = getAdapter(provider);
-            return adapter.createChatModel(modelName, temperature, maxTokens);
+            return adapter.createChatModel(getApiKey(provider), modelName, temperature, maxTokens);
         });
     }
 
@@ -78,7 +81,7 @@ public class LLMService implements ApplicationRunner {
         String cacheKey = buildCacheKey(provider, modelName, temperature, maxTokens);
         return streamingModelCache.computeIfAbsent(cacheKey, k -> {
             ModelAdapter adapter = getAdapter(provider);
-            return adapter.createStreamingModel(modelName, temperature, maxTokens);
+            return adapter.createStreamingModel(getApiKey(provider), modelName, temperature, maxTokens);
         });
     }
 
@@ -109,8 +112,26 @@ public class LLMService implements ApplicationRunner {
             ", 已配置的提供商: " + modelAdapterMap.keySet());
     }
 
-    private boolean isProviderConfigured(String provider) {
-        return getAdapter(provider).isConfigured();
+    private String getApiKey(String provider) {
+        String adapterKey = provider.replaceAll("Adapter$", "").toLowerCase();
+        String apiKey = llmProviderConfigService.getApiKey(adapterKey);
+        if (apiKey == null || apiKey.isBlank()) {
+            String envKey = switch (adapterKey) {
+                case "openai" -> System.getenv("OPENAI_API_KEY");
+                case "deepseek" -> System.getenv("DEEPSEEK_API_KEY");
+                case "qwen" -> System.getenv("DASHSCOPE_API_KEY");
+                case "anthropic" -> System.getenv("ANTHROPIC_API_KEY");
+                default -> null;
+            };
+            if (envKey != null && !envKey.isBlank()) {
+                apiKey = envKey;
+            }
+        }
+        return apiKey;
+    }
+
+    private boolean isApiKeyConfigured(String apiKey) {
+        return apiKey != null && !apiKey.isBlank();
     }
 
     /**
@@ -121,6 +142,11 @@ public class LLMService implements ApplicationRunner {
             String adapterName = entry.getKey();
             String adapterKey = adapterName.replaceAll("Adapter$", "").toLowerCase();
             if (adapterName.equalsIgnoreCase(provider) || adapterKey.equals(provider.trim().toLowerCase())) {
+                String apiKey = getApiKey(provider);
+                if (isApiKeyConfigured(apiKey)) {
+                    providerAvailability.put(adapterName, true);
+                    return true;
+                }
                 return providerAvailability.getOrDefault(adapterName, false);
             }
         }

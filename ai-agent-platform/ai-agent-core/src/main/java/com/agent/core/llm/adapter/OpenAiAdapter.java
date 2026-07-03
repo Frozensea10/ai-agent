@@ -4,7 +4,6 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -19,24 +18,13 @@ public class OpenAiAdapter implements ModelAdapter {
     private static final String MODEL_GPT_4O = "gpt-4o";
     private static final String MODEL_GPT_4O_MINI = "gpt-4o-mini";
 
-    private final String apiKey;
-
-    public OpenAiAdapter(@Value("${llm.openai.api-key:}") String apiKey) {
-        this.apiKey = apiKey;
-    }
-
     @Override
     public String getProvider() {
         return PROVIDER_OPENAI;
     }
 
     @Override
-    public boolean isConfigured() {
-        return apiKey != null && !apiKey.isBlank();
-    }
-
-    @Override
-    public ChatModel createChatModel(String modelName, Double temperature, Integer maxTokens) {
+    public ChatModel createChatModel(String apiKey, String modelName, Double temperature, Integer maxTokens) {
         return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(resolveModelName(modelName))
@@ -48,7 +36,7 @@ public class OpenAiAdapter implements ModelAdapter {
     }
 
     @Override
-    public StreamingChatModel createStreamingModel(String modelName, Double temperature, Integer maxTokens) {
+    public StreamingChatModel createStreamingModel(String apiKey, String modelName, Double temperature, Integer maxTokens) {
         return OpenAiStreamingChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(resolveModelName(modelName))

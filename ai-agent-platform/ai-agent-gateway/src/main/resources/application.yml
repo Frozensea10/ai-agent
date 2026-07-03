@@ -43,7 +43,7 @@ spring:
         - id: agent-service
           uri: http://localhost:8082
           predicates:
-            - Path=/api/v1/agents/**
+            - Path=/api/v1/agents/**, /api/v1/settings/**
           filters:
             - StripPrefix=0
         - id: knowledge-service
