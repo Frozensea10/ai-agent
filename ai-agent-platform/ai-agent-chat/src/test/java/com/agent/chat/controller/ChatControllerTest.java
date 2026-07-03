@@ -234,8 +234,8 @@ class ChatControllerTest {
     void sendMessage_shouldReturnAiMessage() throws Exception {
         AgentConfigDTO agent = createAgentConfig();
         when(sessionService.getSession(SESSION_ID, USER_ID)).thenReturn(createSession());
-        when(agentFeignClient.getAgent(AGENT_ID)).thenReturn(Result.success(agent));
-        when(knowledgeFeignClient.ragQuery(anyString(), any(KnowledgeFeignClient.RAGQueryRequest.class)))
+        when(agentFeignClient.getAgent(AGENT_ID, USER_ID)).thenReturn(Result.success(agent));
+        when(knowledgeFeignClient.ragQuery(anyString(), any(KnowledgeFeignClient.RAGQueryRequest.class), eq(USER_ID)))
                 .thenReturn(Result.success(null));
 
         ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
@@ -275,7 +275,7 @@ class ChatControllerTest {
     void streamChat_shouldReturnSseStream() throws Exception {
         AgentConfigDTO agent = createAgentConfig();
         when(sessionService.getSession(SESSION_ID, USER_ID)).thenReturn(createSession());
-        when(agentFeignClient.getAgent(AGENT_ID)).thenReturn(Result.success(agent));
+        when(agentFeignClient.getAgent(AGENT_ID, USER_ID)).thenReturn(Result.success(agent));
 
         StreamingChatModel streamingModel = org.mockito.Mockito.mock(StreamingChatModel.class);
         when(llmService.createStreamingModel(anyString(), anyString(), anyDouble(), anyInt())).thenReturn(streamingModel);

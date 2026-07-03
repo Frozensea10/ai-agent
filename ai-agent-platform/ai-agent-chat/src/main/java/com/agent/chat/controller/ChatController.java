@@ -58,7 +58,7 @@ public class ChatController {
     @GetMapping("/sessions")
     public Result<List<ChatSessionVO>> listSessions(@RequestHeader(HEADER_USER_ID) Long userId) {
         List<ChatSession> sessions = sessionService.listSessions(userId);
-        return Result.success(sessions.stream().map(this::convertToSessionVO).collect(Collectors.toList()));
+        return Result.success(sessions.stream().map(s -> convertToSessionVO(s, userId)).collect(Collectors.toList()));
     }
 
     @Operation(summary = "创建会话", description = "为当前用户创建新的聊天会话")
@@ -67,7 +67,7 @@ public class ChatController {
             @Valid @RequestBody CreateSessionRequest request,
             @RequestHeader(HEADER_USER_ID) Long userId) {
         ChatSession session = sessionService.createSession(userId, request.getAgentId(), request.getKbId(), request.getTitle());
-        return Result.success(convertToSessionVO(session));
+        return Result.success(convertToSessionVO(session, userId));
     }
 
     @Operation(summary = "删除会话", description = "根据会话 ID 删除会话并清空对应记忆")
@@ -98,7 +98,7 @@ public class ChatController {
             @RequestHeader(HEADER_USER_ID) Long userId) {
         sessionService.getSession(sessionId, userId);
 
-        AgentConfigDTO agent = resolveAgent(request.getAgentId());
+        AgentConfigDTO agent = resolveAgent(request.getAgentId(), userId);
         String kbCode = request.getKbCode();
         String ragContext = retrieveRagContext(kbCode, request.getContent(), userId);
 
@@ -140,7 +140,7 @@ public class ChatController {
         try {
             sessionService.getSession(sessionId, userId);
 
-            AgentConfigDTO agent = resolveAgent(agentId);
+            AgentConfigDTO agent = resolveAgent(agentId, userId);
             String ragContext = retrieveRagContext(kbCode, content, userId);
 
             StreamingChatModel streamingModel = llmService.createStreamingModel(
@@ -178,8 +178,8 @@ public class ChatController {
         }
     }
 
-    private AgentConfigDTO resolveAgent(Long agentId) {
-        Result<AgentConfigDTO> agentResult = agentFeignClient.getAgent(agentId);
+    private AgentConfigDTO resolveAgent(Long agentId, Long userId) {
+        Result<AgentConfigDTO> agentResult = agentFeignClient.getAgent(agentId, userId);
         if (!agentResult.isSuccess() || agentResult.getData() == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "Agent 不存在或无法访问");
         }
@@ -194,7 +194,7 @@ public class ChatController {
             KnowledgeFeignClient.RAGQueryRequest request = new KnowledgeFeignClient.RAGQueryRequest();
             request.setQuery(query);
             request.setTopK(5);
-            Result<KnowledgeFeignClient.RAGResponse> result = knowledgeFeignClient.ragQuery(kbCode, request);
+            Result<KnowledgeFeignClient.RAGResponse> result = knowledgeFeignClient.ragQuery(kbCode, request, userId);
             if (result != null && result.isSuccess() && result.getData() != null) {
                 return result.getData().getContext();
             }
@@ -205,13 +205,13 @@ public class ChatController {
         return null;
     }
 
-    private ChatSessionVO convertToSessionVO(ChatSession session) {
+    private ChatSessionVO convertToSessionVO(ChatSession session, Long userId) {
         ChatSessionVO vo = new ChatSessionVO();
         vo.setId(session.getId());
         vo.setSessionId(session.getSessionId());
         vo.setAgentId(session.getAgentId());
         vo.setKbId(session.getKbId());
-        vo.setKbCode(resolveKbCode(session.getKbId()));
+        vo.setKbCode(resolveKbCode(session.getKbId(), userId));
         vo.setSessionTitle(session.getSessionTitle());
         vo.setMessageCount(session.getMessageCount());
         vo.setStatus(session.getStatus());
@@ -220,12 +220,12 @@ public class ChatController {
         return vo;
     }
 
-    private String resolveKbCode(Long kbId) {
+    private String resolveKbCode(Long kbId, Long userId) {
         if (kbId == null) {
             return null;
         }
         try {
-            Result<KnowledgeFeignClient.KnowledgeBaseVO> result = knowledgeFeignClient.getKnowledgeBaseById(kbId);
+            Result<KnowledgeFeignClient.KnowledgeBaseVO> result = knowledgeFeignClient.getKnowledgeBaseById(kbId, userId);
             if (result != null && result.isSuccess() && result.getData() != null) {
                 return result.getData().getKbCode();
             }

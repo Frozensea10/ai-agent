@@ -7,14 +7,15 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.List;
 
-@FeignClient(name = "ai-agent-knowledge", path = "/api/v1/knowledge-bases")
+@FeignClient(name = "ai-agent-knowledge", url = "http://localhost:8084", path = "/api/v1/knowledge-bases")
 public interface KnowledgeFeignClient {
 
     @GetMapping("/{id}")
-    Result<KnowledgeBaseVO> getKnowledgeBaseById(@PathVariable("id") Long id);
+    Result<KnowledgeBaseVO> getKnowledgeBaseById(@PathVariable("id") Long id, @RequestHeader("X-User-Id") Long userId);
 
     @PostMapping("/{kbCode}/retrieve")
     Result<List<RetrievalResult>> retrieve(
@@ -24,7 +25,8 @@ public interface KnowledgeFeignClient {
     @PostMapping("/{kbCode}/rag")
     Result<RAGResponse> ragQuery(
             @PathVariable("kbCode") String kbCode,
-            @RequestBody RAGQueryRequest request);
+            @RequestBody RAGQueryRequest request,
+            @RequestHeader("X-User-Id") Long userId);
 
     @Data
     class RetrieveRequest {

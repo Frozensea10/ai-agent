@@ -94,19 +94,37 @@ public class LLMService implements ApplicationRunner {
     }
 
     private ModelAdapter getAdapter(String provider) {
-        ModelAdapter adapter = modelAdapterMap.get(provider);
-        if (adapter == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "不支持的模型提供商: " + provider +
-                ", 已配置的提供商: " + modelAdapterMap.keySet());
+        if (provider == null || provider.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "模型提供商不能为空");
         }
-        return adapter;
+        String normalized = provider.trim().toLowerCase();
+        for (Map.Entry<String, ModelAdapter> entry : modelAdapterMap.entrySet()) {
+            String adapterName = entry.getKey();
+            String adapterKey = adapterName.replaceAll("Adapter$", "").toLowerCase();
+            if (adapterName.equalsIgnoreCase(provider) || adapterName.equalsIgnoreCase(normalized) || adapterKey.equals(normalized)) {
+                return entry.getValue();
+            }
+        }
+        throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "不支持的模型提供商: " + provider +
+            ", 已配置的提供商: " + modelAdapterMap.keySet());
+    }
+
+    private boolean isProviderConfigured(String provider) {
+        return getAdapter(provider).isConfigured();
     }
 
     /**
      * 检查提供商是否配置存在且API Key有效
      */
     public boolean isProviderAvailable(String provider) {
-        return providerAvailability.getOrDefault(provider, false);
+        for (Map.Entry<String, ModelAdapter> entry : modelAdapterMap.entrySet()) {
+            String adapterName = entry.getKey();
+            String adapterKey = adapterName.replaceAll("Adapter$", "").toLowerCase();
+            if (adapterName.equalsIgnoreCase(provider) || adapterKey.equals(provider.trim().toLowerCase())) {
+                return providerAvailability.getOrDefault(adapterName, false);
+            }
+        }
+        return false;
     }
 
     /**

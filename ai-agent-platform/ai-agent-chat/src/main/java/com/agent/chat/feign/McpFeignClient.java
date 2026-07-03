@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.util.List;
 import java.util.Map;
 
-@FeignClient(name = "mcp-service", fallbackFactory = McpFeignClientFallbackFactory.class)
+@FeignClient(name = "mcp-service", url = "http://localhost:8086", fallbackFactory = McpFeignClientFallbackFactory.class)
 public interface McpFeignClient {
 
     @GetMapping("/api/v1/mcp/tools")

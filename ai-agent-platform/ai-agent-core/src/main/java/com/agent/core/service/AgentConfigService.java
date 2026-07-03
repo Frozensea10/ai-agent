@@ -112,7 +112,7 @@ public class AgentConfigService {
         if (config == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "Agent 不存在");
         }
-        if (!config.getCreatedBy().equals(userId)) {
+        if (!isSystemAgent(config) && !config.getCreatedBy().equals(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "权限不足");
         }
         return convertToVO(config);
@@ -121,12 +121,19 @@ public class AgentConfigService {
     @Cacheable(value = CACHE_NAME, key = CACHE_KEY_LIST + " + #userId")
     public List<AgentVO> listAgents(Long userId) {
         LambdaQueryWrapper<AgentConfig> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AgentConfig::getCreatedBy, userId)
+        wrapper.and(w -> w.eq(AgentConfig::getCreatedBy, userId)
+                        .or(w2 -> w2.eq(AgentConfig::getCreatedBy, 1)
+                                    .eq(AgentConfig::getAgentCode, "default-assistant")))
                 .eq(AgentConfig::getDeleted, 0)
                 .orderByDesc(AgentConfig::getCreatedAt);
         return agentConfigMapper.selectList(wrapper).stream()
                 .map(this::convertToVO)
                 .collect(Collectors.toList());
+    }
+
+    private boolean isSystemAgent(AgentConfig config) {
+        Long systemUserId = 1L;
+        return systemUserId.equals(config.getCreatedBy()) || "default-assistant".equals(config.getAgentCode());
     }
 
     @Cacheable(value = CACHE_NAME, key = CACHE_KEY_PREFIX + " + #agentCode")
