@@ -26,10 +26,6 @@ spring:
     url: jdbc:mysql://localhost:3306/ai_agent?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai
     username: ai_agent
     password: ${MYSQL_PASSWORD:ai_agent123}
-  redis:
-    host: localhost
-    port: 6379
-    database: 0
   doc:
     swagger-ui:
       path: /swagger-ui/index.html
@@ -37,6 +33,11 @@ spring:
     api-docs:
       path: /v3/api-docs
       enabled: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
 
 jwt:
   # 必须通过环境变量 JWT_SECRET 提供（>=32 字符），不提供默认值以防误用弱密钥

@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -44,14 +45,11 @@ public class ChatLLMService {
 
     public String chat(String sessionId, String message, String systemPrompt,
                        String ragContext, String memoryType, Integer maxMessages,
-                       ChatModel chatModel) {
+                       ChatModel chatModel, Long userId) {
         chatMemoryProvider.addUserMessage(sessionId, memoryType, maxMessages, message);
-        List<ChatMessage> history = chatMemoryProvider.getMessages(sessionId, memoryType, maxMessages);
 
         String prompt = buildSystemPrompt(systemPrompt, ragContext);
-        if (prompt != null && !prompt.isBlank()) {
-            history.add(0, SystemMessage.from(prompt));
-        }
+        List<ChatMessage> history = buildHistoryWithPrompt(sessionId, memoryType, maxMessages, prompt);
 
         ChatResponse response = chatModel.chat(history);
         String content = response.aiMessage().text();
@@ -59,7 +57,24 @@ public class ChatLLMService {
             content = "";
         }
 
-        String processedContent = processToolCalls(content);
+        String processedContent = processToolCalls(content, userId);
+
+        if (hasToolCall(content)) {
+            String toolResultMessage = "[工具执行结果]\n" + processedContent;
+            chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, content);
+            chatMemoryProvider.addUserMessage(sessionId, memoryType, maxMessages, toolResultMessage);
+
+            List<ChatMessage> recallHistory = buildHistoryWithPrompt(sessionId, memoryType, maxMessages, prompt);
+            ChatResponse recallResponse = chatModel.chat(recallHistory);
+            String recallContent = recallResponse.aiMessage().text();
+            if (recallContent == null) {
+                recallContent = "";
+            }
+
+            processedContent = recallContent;
+            chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, processedContent);
+            return processedContent;
+        }
 
         chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, processedContent);
         return processedContent;
@@ -67,8 +82,8 @@ public class ChatLLMService {
 
     public Flux<SSEMessage> streamChat(String sessionId, String message, String systemPrompt,
                                    String ragContext, String memoryType, Integer maxMessages,
-                                   StreamingChatModel streamingModel,
-                                   String modelName) {
+                                   StreamingChatModel streamingModel, ChatModel chatModel,
+                                   String modelName, Long userId) {
         String messageId = MessageIdGenerator.generate();
         AtomicBoolean cancelled = new AtomicBoolean(false);
 
@@ -79,12 +94,9 @@ public class ChatLLMService {
                 sink.next(SSEMessage.start(messageId));
 
                 chatMemoryProvider.addUserMessage(sessionId, memoryType, maxMessages, message);
-                List<ChatMessage> history = chatMemoryProvider.getMessages(sessionId, memoryType, maxMessages);
 
                 String prompt = buildSystemPrompt(systemPrompt, ragContext);
-                if (prompt != null && !prompt.isBlank()) {
-                    history.add(0, SystemMessage.from(prompt));
-                }
+                List<ChatMessage> history = buildHistoryWithPrompt(sessionId, memoryType, maxMessages, prompt);
 
                 streamingModel.chat(history, new StreamingChatResponseHandler() {
                     @Override
@@ -99,10 +111,32 @@ public class ChatLLMService {
                         if (cancelled.get()) return;
                         try {
                             String content = completeResponse.aiMessage().text();
+                            if (content == null) {
+                                content = "";
+                            }
 
-                            String processedContent = processToolCallsInStream(content, sink);
+                            String processedContent = processToolCallsInStream(content, sink, userId);
                             if (processedContent == null) {
                                 processedContent = content;
+                            }
+
+                            if (hasToolCall(content)) {
+                                String toolResultMessage = "[工具执行结果]\n" + processedContent;
+                                chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, content);
+                                chatMemoryProvider.addUserMessage(sessionId, memoryType, maxMessages, toolResultMessage);
+
+                                List<ChatMessage> recallHistory = buildHistoryWithPrompt(sessionId, memoryType, maxMessages, prompt);
+                                ChatResponse recallResponse = chatModel.chat(recallHistory);
+                                String recallContent = recallResponse.aiMessage().text();
+                                if (recallContent == null) {
+                                    recallContent = "";
+                                }
+                                processedContent = recallContent;
+                                chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, processedContent);
+                                sink.next(SSEMessage.content(processedContent));
+                                sink.next(SSEMessage.end(messageId, null));
+                                sink.complete();
+                                return;
                             }
 
                             chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, processedContent);
@@ -147,7 +181,24 @@ public class ChatLLMService {
                 });
     }
 
-    private String processToolCalls(String content) {
+    private List<ChatMessage> buildHistoryWithPrompt(String sessionId, String memoryType, Integer maxMessages, String prompt) {
+        List<ChatMessage> history = new ArrayList<>(chatMemoryProvider.getMessages(sessionId, memoryType, maxMessages));
+        if (prompt != null && !prompt.isBlank()) {
+            history.add(0, SystemMessage.from(prompt));
+        }
+        return history;
+    }
+
+    private boolean hasToolCall(String content) {
+        if (content == null || content.isBlank()) {
+            return false;
+        }
+        String normalized = normalizeToolCalls(content);
+        return TOOL_CALL_PATTERN.matcher(normalized).find();
+    }
+
+    private String processToolCalls(String content, Long userId) {
+        content = normalizeToolCalls(content);
         Matcher matcher = TOOL_CALL_PATTERN.matcher(content);
         StringBuilder result = new StringBuilder(content);
 
@@ -159,7 +210,7 @@ public class ChatLLMService {
 
             try {
                 Map<String, Object> params = objectMapper.readValue(arguments, MAP_TYPE_REFERENCE);
-                Result<ToolExecuteResult> toolResult = mcpFeignClient.executeTool(toolName, params);
+                Result<ToolExecuteResult> toolResult = mcpFeignClient.executeTool(toolName, params, userId);
 
                 String replacement = buildToolResultReplacement(toolResult);
 
@@ -173,7 +224,8 @@ public class ChatLLMService {
         return result.toString();
     }
 
-    private String processToolCallsInStream(String content, FluxSink<SSEMessage> sink) {
+    private String processToolCallsInStream(String content, FluxSink<SSEMessage> sink, Long userId) {
+        content = normalizeToolCalls(content);
         Matcher matcher = TOOL_CALL_PATTERN.matcher(content);
         if (!matcher.find()) {
             return null;
@@ -194,7 +246,7 @@ public class ChatLLMService {
                 sink.next(SSEMessage.toolCall(toolName, arguments));
 
                 Map<String, Object> params = objectMapper.readValue(arguments, MAP_TYPE_REFERENCE);
-                Result<ToolExecuteResult> toolResult = mcpFeignClient.executeTool(toolName, params);
+                Result<ToolExecuteResult> toolResult = mcpFeignClient.executeTool(toolName, params, userId);
 
                 String toolResultStr = buildToolResultString(toolResult);
 
@@ -209,6 +261,120 @@ public class ChatLLMService {
         }
 
         return hasToolCall ? result.toString() : null;
+    }
+
+    private String normalizeToolCalls(String content) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+        content = normalizeToolNameBlocks(content, FUNCTION_CALL_REGEX, "function_call");
+        content = normalizeToolNameBlocks(content, TOOL_NAME_REGEX, "tool_name");
+        content = normalizePlainToolCalls(content);
+
+        Pattern jsonBlockPattern = Pattern.compile(JSON_CODE_BLOCK_REGEX);
+        Matcher matcher = jsonBlockPattern.matcher(content);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String arguments = matcher.group(2);
+            String replacement = "<tool_call>{\"name\":\"" + name + "\",\"arguments\":" + arguments + "}</tool_call>";
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private String normalizeToolNameBlocks(String content, String regex, String mode) {
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(content);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String arguments = matcher.group(2);
+            String realName = normalizeToolName(name);
+            String replacement = "<tool_call>{\"name\":\"" + realName + "\",\"arguments\":" + arguments + "}</tool_call>";
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private String normalizePlainToolCalls(String content) {
+        Pattern pattern = Pattern.compile(PLAIN_TOOL_CALL_REGEX);
+        Matcher matcher = pattern.matcher(content);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String arguments = matcher.group(2);
+            String realName = normalizeToolName(name);
+            String replacement = "<tool_call>{\"name\":\"" + realName + "\",\"arguments\":" + arguments + "}</tool_call>";
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private String normalizeFunctionCalls(String content) {
+        Pattern functionCallPattern = Pattern.compile(FUNCTION_CALL_REGEX);
+        Matcher matcher = functionCallPattern.matcher(content);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String arguments = matcher.group(2);
+            String realName = normalizeToolName(name);
+            String paramName = getParamName(realName);
+            String argsJson = escapeJsonString(paramName, arguments);
+            String replacement = "<tool_call>{\"name\":\"" + realName + "\",\"arguments\":" + argsJson + "}</tool_call>";
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private String normalizeToolName(String name) {
+        String lower = name.toLowerCase();
+        if (lower.contains("python") || lower.equals("py")) {
+            return "code_python";
+        }
+        if ((lower.contains("java") && !lower.contains("script")) || lower.equals("javac")) {
+            return "code_java";
+        }
+        if (lower.contains("sql") || lower.contains("query") || lower.contains("database") || lower.equals("db")) {
+            return "db_query";
+        }
+        if (lower.contains("http") || lower.contains("web") || lower.contains("url") || lower.contains("request")) {
+            return "http_request";
+        }
+        return name;
+    }
+
+    private String getParamName(String toolName) {
+        return switch (toolName) {
+            case "db_query" -> "sql";
+            case "http_request" -> "url";
+            case "code_java", "code_python" -> "code";
+            default -> "value";
+        };
+    }
+
+    private String escapeJsonString(String key, String value) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"").append(key).append("\":\"");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\b' -> sb.append("\\b");
+                case '\f' -> sb.append("\\f");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> sb.append(c);
+            }
+        }
+        sb.append("\"");
+        return sb.toString();
     }
 
     private String buildToolResultReplacement(Result<ToolExecuteResult> toolResult) {
@@ -243,12 +409,13 @@ public class ChatLLMService {
             if (prompt.length() > 0) {
                 prompt.append("\n\n");
             }
-            prompt.append("以下是与用户问题相关的参考信息，请严格基于这些信息回答，禁止忽略或编造:\n\n").append(ragContext).append("\n\n");
+            prompt.append("以下是与用户问题相关的参考信息:\n\n").append(ragContext).append("\n\n");
             prompt.append("回答要求：\n");
-            prompt.append("1. 你必须优先基于上述参考信息回答用户问题。\n");
+            prompt.append("1. 如果用户问题与参考信息相关，请优先基于参考信息回答。\n");
             prompt.append("2. 如果参考信息足以回答，请直接给出答案。\n");
-            prompt.append("3. 如果参考信息不足，请明确说明\"根据提供的参考信息无法回答该问题\"。\n");
-            prompt.append("4. 不要回答\"没有收到文件\"或\"没有看到知识库\"，因为参考信息已经提供。");
+            prompt.append("3. 如果参考信息不足，但你配备了数据库查询等工具，请先调用工具获取数据，再基于工具结果回答，不要直接说无法回答。\n");
+            prompt.append("4. 不要回答\"没有收到文件\"或\"没有看到知识库\"，因为参考信息已经提供。\n");
+            prompt.append("5. 当需要调用工具时，直接输出工具调用格式，不要解释。");
         }
         return prompt.toString();
     }

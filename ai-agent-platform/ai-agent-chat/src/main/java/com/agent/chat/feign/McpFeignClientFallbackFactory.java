@@ -25,7 +25,7 @@ public class McpFeignClientFallbackFactory implements FallbackFactory<McpFeignCl
             }
 
             @Override
-            public Result<ToolExecuteResult> executeTool(String toolCode, Map<String, Object> parameters) {
+            public Result<ToolExecuteResult> executeTool(String toolCode, Map<String, Object> parameters, Long userId) {
                 return Result.error("MCP服务不可用");
             }
         };

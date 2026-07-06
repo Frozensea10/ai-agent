@@ -120,7 +120,8 @@ public class ChatController {
                 ragContext,
                 agent.getMemoryType(),
                 agent.getMemoryMaxMessages(),
-                chatModel
+                chatModel,
+                userId
         );
 
         ChatMessage aiMessage = messageService.saveAssistantMessage(
@@ -158,6 +159,13 @@ public class ChatController {
                     agent.getMaxTokens()
             );
 
+            ChatModel chatModel = llmService.createChatModel(
+                    provider,
+                    name,
+                    agent.getTemperature(),
+                    agent.getMaxTokens()
+            );
+
             messageService.saveUserMessage(sessionId, content);
 
             return chatLLMService.streamChat(
@@ -168,7 +176,9 @@ public class ChatController {
                     agent.getMemoryType(),
                     agent.getMemoryMaxMessages(),
                     streamingModel,
-                    name
+                    chatModel,
+                    name,
+                    userId
             );
         } catch (BusinessException e) {
             return Flux.just(SSEMessage.error(e.getMessage()));

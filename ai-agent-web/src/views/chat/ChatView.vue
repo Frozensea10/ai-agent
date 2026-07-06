@@ -37,6 +37,14 @@
             <span v-if="currentSession?.kbCode" class="kb-tag">KB: {{ currentSession.kbCode }}</span>
           </div>
           <div class="model-select-wrap">
+            <el-select v-model="selectedAgentId" placeholder="选择 Agent" size="small" style="width: 160px; margin-right: 10px" @change="handleAgentChange">
+              <el-option
+                v-for="opt in agentOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
             <el-select v-model="selectedModel" placeholder="选择模型" clearable size="small" style="width: 220px">
               <el-option
                 v-for="opt in modelOptions"
@@ -97,6 +105,14 @@
     <el-dialog v-model="newChatDialogVisible" title="新建对话" width="420px">
       <div class="new-chat-form">
         <el-input v-model="newChatTitle" placeholder="请输入对话标题" />
+        <el-select v-model="newChatAgentId" placeholder="选择 Agent" clearable>
+          <el-option
+            v-for="opt in agentOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
         <el-select v-model="newChatKbId" placeholder="选择知识库" clearable>
           <el-option label="不使用知识库" :value="undefined" />
           <el-option
@@ -120,17 +136,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ChatDotRound, User, Promotion, Plus, ChatSquare, Menu, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listSessions, createSession, deleteSession, getMessages, streamChat } from '@/api/chat'
 import { getKnowledgeBases } from '@/api/knowledge'
 import { listModelProviders } from '@/api/settings'
-import { getAgent } from '@/api/agent'
+import { getAgent, listAgents } from '@/api/agent'
 import { providerLabelMap } from '@/utils/provider'
 import type { ChatSession, ChatMessage } from '@/types/chat'
 import type { KnowledgeBase } from '@/types/knowledge'
 import type { AgentConfig } from '@/types/agent'
+
+const route = useRoute()
+const router = useRouter()
 
 const DEFAULT_AGENT_ID = 1
 
@@ -144,10 +164,24 @@ const sidebarOpen = ref(false)
 const knowledgeBases = ref<KnowledgeBase[]>([])
 const newChatDialogVisible = ref(false)
 const newChatTitle = ref('新对话')
+const newChatAgentId = ref<number>(DEFAULT_AGENT_ID)
 const newChatKbId = ref<number | undefined>(undefined)
 const selectedModel = ref<string>('')
+const selectedAgentId = ref<number>(DEFAULT_AGENT_ID)
 const providerConfigs = ref<{ providerName: string; apiKey?: string; modelName?: string; enabled?: number }[]>([])
 const defaultAgent = ref<AgentConfig | null>(null)
+const agents = ref<AgentConfig[]>([])
+
+const agentOptions = computed(() => {
+  return agents.value.map((agent) => ({
+    label: agent.agentName || agent.agentCode,
+    value: agent.id
+  }))
+})
+
+const currentAgent = computed(() => {
+  return agents.value.find((a) => a.id === selectedAgentId.value) || defaultAgent.value
+})
 
 const modelOptions = computed(() => {
   const options = providerConfigs.value
@@ -156,11 +190,12 @@ const modelOptions = computed(() => {
       label: `${providerLabelMap[item.providerName] || item.providerName} · ${item.modelName}`,
       value: `${item.providerName}:${item.modelName}`
     }))
-  if (defaultAgent.value?.modelProvider && defaultAgent.value?.modelName) {
-    const defaultValue = `${defaultAgent.value.modelProvider}:${defaultAgent.value.modelName}`
+  const agent = currentAgent.value
+  if (agent?.modelProvider && agent?.modelName) {
+    const defaultValue = `${agent.modelProvider}:${agent.modelName}`
     if (!options.some(opt => opt.value === defaultValue)) {
       options.unshift({
-        label: `${providerLabelMap[defaultAgent.value.modelProvider] || defaultAgent.value.modelProvider} · ${defaultAgent.value.modelName}（Agent 默认）`,
+        label: `${providerLabelMap[agent.modelProvider] || agent.modelProvider} · ${agent.modelName}（Agent 默认）`,
         value: defaultValue
       })
     }
@@ -247,11 +282,35 @@ const loadDefaultAgent = async () => {
   try {
     const agent = await getAgent(DEFAULT_AGENT_ID)
     defaultAgent.value = agent
-    if (agent.modelProvider && agent.modelName) {
+    if (!route.query.agentId && agent.modelProvider && agent.modelName) {
       selectedModel.value = `${agent.modelProvider}:${agent.modelName}`
     }
   } catch (e) {
     ElMessage.error('加载默认 Agent 失败')
+  }
+}
+
+const loadAgents = async () => {
+  try {
+    const data = await listAgents()
+    agents.value = data || []
+  } catch (e) {
+    ElMessage.error('加载 Agent 列表失败')
+  }
+}
+
+const initSelectedAgent = () => {
+  const queryAgentId = route.query.agentId ? Number(route.query.agentId) : undefined
+  if (queryAgentId && agents.value.some(a => a.id === queryAgentId)) {
+    selectedAgentId.value = queryAgentId
+  } else if (agents.value.length > 0) {
+    selectedAgentId.value = agents.value[0].id || DEFAULT_AGENT_ID
+  } else {
+    selectedAgentId.value = DEFAULT_AGENT_ID
+  }
+  const agent = currentAgent.value
+  if (agent?.modelProvider && agent?.modelName) {
+    selectedModel.value = `${agent.modelProvider}:${agent.modelName}`
   }
 }
 
@@ -263,6 +322,7 @@ const selectSession = async (sessionId: string) => {
 
 const openNewChatDialog = () => {
   newChatTitle.value = '新对话'
+  newChatAgentId.value = selectedAgentId.value
   newChatKbId.value = undefined
   newChatDialogVisible.value = true
 }
@@ -270,11 +330,13 @@ const openNewChatDialog = () => {
 const confirmCreateNewChat = async () => {
   const title = newChatTitle.value.trim() || '新对话'
   const kbId = newChatKbId.value
+  const agentId = newChatAgentId.value || selectedAgentId.value
   try {
-    const data = await createSession({ agentId: DEFAULT_AGENT_ID, title, kbId })
+    const data = await createSession({ agentId, title, kbId })
     chatSessions.value.unshift(data)
     currentSessionId.value = data.sessionId
     messages.value = []
+    selectedAgentId.value = agentId
     sidebarOpen.value = false
     newChatDialogVisible.value = false
   } catch (e) {
@@ -300,7 +362,7 @@ const handleDeleteSession = async (sessionId: string) => {
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || sending.value) return
   if (!currentSessionId.value) {
-    const session = await createSession({ agentId: DEFAULT_AGENT_ID, title: '新对话' })
+    const session = await createSession({ agentId: selectedAgentId.value, title: '新对话' })
     if (!session?.sessionId) return
     chatSessions.value.unshift(session)
     currentSessionId.value = session.sessionId
@@ -337,7 +399,7 @@ const sendMessage = async () => {
   currentAbortController.value = streamChat(
     currentSessionId.value,
     content,
-    DEFAULT_AGENT_ID,
+    selectedAgentId.value,
     (messageId) => {
       aiMsg.messageId = messageId
     },
@@ -363,7 +425,30 @@ const sendMessage = async () => {
   )
 }
 
-onMounted(() => {
+const handleAgentChange = (agentId: number) => {
+  selectedAgentId.value = agentId
+  const agent = currentAgent.value
+  if (agent?.modelProvider && agent?.modelName) {
+    selectedModel.value = `${agent.modelProvider}:${agent.modelName}`
+  }
+  if (route.query.agentId) {
+    router.replace({ path: route.path })
+  }
+}
+
+watch(
+  () => agents.value,
+  () => {
+    if (agents.value.length > 0 && selectedAgentId.value === DEFAULT_AGENT_ID) {
+      initSelectedAgent()
+    }
+  },
+  { once: true }
+)
+
+onMounted(async () => {
+  await loadAgents()
+  initSelectedAgent()
   loadSessions()
   loadKnowledgeBases()
   loadModelProviders()

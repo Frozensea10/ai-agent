@@ -14,7 +14,7 @@
             <el-icon><ChatDotRound /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">0</div>
+            <div class="stat-value">{{ stats.chatCount }}</div>
             <div class="stat-label">对话次数</div>
           </div>
         </div>
@@ -25,7 +25,7 @@
             <el-icon><Document /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">0</div>
+            <div class="stat-value">{{ stats.docCount }}</div>
             <div class="stat-label">知识库文档</div>
           </div>
         </div>
@@ -36,7 +36,7 @@
             <el-icon><Setting /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">0</div>
+            <div class="stat-value">{{ stats.agentCount }}</div>
             <div class="stat-label">Agent 数量</div>
           </div>
         </div>
@@ -47,7 +47,7 @@
             <el-icon><Tools /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">0</div>
+            <div class="stat-value">{{ stats.toolCount }}</div>
             <div class="stat-label">工具数量</div>
           </div>
         </div>
@@ -123,7 +123,44 @@
 </template>
 
 <script setup lang="ts">
+import { reactive, onMounted } from 'vue'
 import { ChatDotRound, Document, Setting, Tools, Star, Lightning } from '@element-plus/icons-vue'
+import { listSessions } from '@/api/chat'
+import { getKnowledgeBases } from '@/api/knowledge'
+import { listAgents } from '@/api/agent'
+import { listTools } from '@/api/mcp'
+import type { ChatSession } from '@/types/chat'
+import type { KnowledgeBase } from '@/types/knowledge'
+import type { AgentConfig } from '@/types/agent'
+import type { ToolInfo } from '@/api/mcp'
+
+const stats = reactive({
+  chatCount: 0,
+  docCount: 0,
+  agentCount: 0,
+  toolCount: 0
+})
+
+async function loadStats() {
+  try {
+    const [sessions, bases, agents, tools] = await Promise.all([
+      listSessions().catch(() => [] as ChatSession[]),
+      getKnowledgeBases().catch(() => [] as KnowledgeBase[]),
+      listAgents().catch(() => [] as AgentConfig[]),
+      listTools().catch(() => [] as ToolInfo[])
+    ])
+    stats.chatCount = (sessions || []).reduce((sum, s) => sum + (s.messageCount || 0), 0)
+    stats.docCount = (bases || []).reduce((sum, b) => sum + (b.documentCount || 0), 0)
+    stats.agentCount = (agents || []).length
+    stats.toolCount = (tools || []).length
+  } catch (e) {
+    console.error('加载统计数据失败', e)
+  }
+}
+
+onMounted(() => {
+  loadStats()
+})
 </script>
 
 <style scoped>

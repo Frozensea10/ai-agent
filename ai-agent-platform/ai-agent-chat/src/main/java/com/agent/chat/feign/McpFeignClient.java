@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.web.bind.annotation.RequestHeader;
+
 @FeignClient(name = "mcp-service", url = "http://localhost:8086", fallbackFactory = McpFeignClientFallbackFactory.class)
 public interface McpFeignClient {
 
@@ -20,5 +22,7 @@ public interface McpFeignClient {
     Result<List<ToolInfoDTO>> listTools();
 
     @PostMapping("/api/v1/mcp/tools/{toolCode}/execute")
-    Result<ToolExecuteResult> executeTool(@PathVariable("toolCode") String toolCode, @RequestBody Map<String, Object> parameters);
+    Result<ToolExecuteResult> executeTool(@PathVariable("toolCode") String toolCode,
+                                          @RequestBody Map<String, Object> parameters,
+                                          @RequestHeader("X-User-Id") Long userId);
 }

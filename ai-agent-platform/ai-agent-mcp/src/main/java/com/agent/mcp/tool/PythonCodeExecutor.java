@@ -4,6 +4,7 @@ import com.agent.mcp.dto.ToolExecuteRequest;
 import com.agent.mcp.dto.ToolExecuteResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -32,6 +33,9 @@ import java.util.regex.Pattern;
 public class PythonCodeExecutor implements BuiltInToolExecutor {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${mcp.python.executable:python3}")
+    private String pythonExecutable;
 
     private static final long TIMEOUT_SECONDS = 30;
     private static final long MAX_OUTPUT_LENGTH = 10000;
@@ -121,7 +125,7 @@ public class PythonCodeExecutor implements BuiltInToolExecutor {
 
             // -S: 禁用 site-packages（避免加载第三方危险模块）
             // -E: 忽略 PYTHON* 环境变量（避免 PYTHONSTARTUP / PYTHONPATH 注入）
-            ProcessBuilder pb = new ProcessBuilder("python3", "-S", "-E", tempFile.toString());
+            ProcessBuilder pb = new ProcessBuilder(pythonExecutable, "-S", "-E", tempFile.toString());
             // 合并 stderr 到 stdout，便于统一捕获；不调用 inheritIO()，避免子进程输出污染 JVM 日志
             pb.redirectErrorStream(true);
 

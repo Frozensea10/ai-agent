@@ -3,3 +3,16 @@
 jwt:
   # 开发用固定密钥，所有模块必须保持一致，否则跨服务鉴权会失败
   secret: AiAgentPlatformDevSecretKey2026!@#$
+
+mcp:
+  admin:
+    # 高危工具（code_java/code_python/db_query/http_request）允许执行的管理员用户 ID 列表（逗号分隔）
+    # 默认放行 ID=1 的用户（首个注册用户），按需追加其它用户 ID
+    user-ids: 1
+  http:
+    # http_request 工具允许访问的域名白名单（逗号分隔），仅放行需要 AI 调用的外部 API
+    # 生产环境务必收敛白名单，避免 SSRF 风险
+    allowed-domains: localhost,127.0.0.1
+  python:
+    # Windows 开发环境通常安装的是 python 命令；Linux/macOS 可改为 python3
+    executable: python
