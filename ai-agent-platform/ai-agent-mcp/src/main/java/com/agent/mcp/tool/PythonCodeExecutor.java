@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -39,6 +40,11 @@ public class PythonCodeExecutor implements BuiltInToolExecutor {
 
     private static final long TIMEOUT_SECONDS = 30;
     private static final long MAX_OUTPUT_LENGTH = 10000;
+
+    @PostConstruct
+    public void init() {
+        log.info("PythonCodeExecutor 已初始化，使用的 Python 解释器: {}", pythonExecutable);
+    }
 
     // 危险代码检测模式（注意：静态匹配无法 100% 防御绕过，必须配合 OS 级隔离）
     private static final Pattern[] DANGEROUS_PATTERNS = {

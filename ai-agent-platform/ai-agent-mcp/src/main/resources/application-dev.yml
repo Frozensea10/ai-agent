@@ -14,5 +14,6 @@ mcp:
     # 生产环境务必收敛白名单，避免 SSRF 风险
     allowed-domains: localhost,127.0.0.1
   python:
-    # Windows 开发环境通常安装的是 python 命令；Linux/macOS 可改为 python3
-    executable: python
+    # Windows 开发环境请使用 python.exe 的完整绝对路径（用单引号包裹避免 YAML 反斜杠转义问题）
+    # 路径通过 `Get-Command python` 在 PowerShell 中确认
+    executable: 'C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe'

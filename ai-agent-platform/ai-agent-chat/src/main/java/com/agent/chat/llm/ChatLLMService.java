@@ -5,6 +5,7 @@ import com.agent.chat.feign.McpFeignClient;
 import com.agent.chat.memory.ChatMemoryProvider;
 import com.agent.chat.service.MessageIdGenerator;
 import com.agent.chat.service.MessageService;
+import com.agent.chat.service.SessionService;
 import com.agent.common.result.Result;
 import com.agent.mcp.dto.ToolExecuteResult;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -37,6 +38,7 @@ public class ChatLLMService {
 
     private final ChatMemoryProvider chatMemoryProvider;
     private final MessageService messageService;
+    private final SessionService sessionService;
     private final McpFeignClient mcpFeignClient;
     private final ObjectMapper objectMapper;
 
@@ -133,6 +135,8 @@ public class ChatLLMService {
                                 }
                                 processedContent = recallContent;
                                 chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, processedContent);
+                                messageService.saveAssistantMessage(sessionId, processedContent, modelName, null);
+                                sessionService.updateMessageCount(sessionId);
                                 sink.next(SSEMessage.content(processedContent));
                                 sink.next(SSEMessage.end(messageId, null));
                                 sink.complete();
@@ -151,6 +155,7 @@ public class ChatLLMService {
                             usage.setTotalTokens(totalTokens);
 
                             messageService.saveAssistantMessage(sessionId, processedContent, modelName, totalTokens);
+                            sessionService.updateMessageCount(sessionId);
 
                             sink.next(SSEMessage.end(messageId, usage));
                         } catch (Exception e) {
