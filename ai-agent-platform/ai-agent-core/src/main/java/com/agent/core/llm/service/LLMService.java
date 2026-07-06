@@ -13,6 +13,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.agent.core.llm.adapter.LlmAdapterConstants.DEFAULT_MAX_TOKENS;
@@ -44,27 +45,30 @@ public class LLMService implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         System.setProperty("langchain4j.http.clientBuilderFactory",
                 "dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory");
-        log.info("LLM 模型可用性检测开始...");
-        for (Map.Entry<String, ModelAdapter> entry : modelAdapterMap.entrySet()) {
-            String provider = entry.getKey();
-            ModelAdapter adapter = entry.getValue();
-            String apiKey = getApiKey(provider);
-            if (!isApiKeyConfigured(apiKey)) {
-                providerAvailability.put(provider, false);
-                log.warn("⚠️ 模型提供商 [{}] API key 未配置，跳过网络可用性检测", provider);
-                continue;
+        // 异步执行各提供商可用性检测，避免阻塞应用启动
+        CompletableFuture.runAsync(() -> {
+            log.info("LLM 模型可用性检测开始...");
+            for (Map.Entry<String, ModelAdapter> entry : modelAdapterMap.entrySet()) {
+                String provider = entry.getKey();
+                ModelAdapter adapter = entry.getValue();
+                String apiKey = getApiKey(provider);
+                if (!isApiKeyConfigured(apiKey)) {
+                    providerAvailability.put(provider, false);
+                    log.warn("⚠️ 模型提供商 [{}] API key 未配置，跳过网络可用性检测", provider);
+                    continue;
+                }
+                try {
+                    ChatModel testModel = adapter.createChatModel(apiKey, null, HEALTH_CHECK_TEMPERATURE, HEALTH_CHECK_MAX_TOKENS);
+                    String response = testModel.chat("Hello");
+                    providerAvailability.put(provider, true);
+                    log.info("✅ 模型提供商 [{}] 可用", provider);
+                } catch (Exception e) {
+                    providerAvailability.put(provider, false);
+                    log.warn("⚠️ 模型提供商 [{}] 不可用: {}", provider, e.getMessage());
+                }
             }
-            try {
-                ChatModel testModel = adapter.createChatModel(apiKey, null, HEALTH_CHECK_TEMPERATURE, HEALTH_CHECK_MAX_TOKENS);
-                String response = testModel.chat("Hello");
-                providerAvailability.put(provider, true);
-                log.info("✅ 模型提供商 [{}] 可用", provider);
-            } catch (Exception e) {
-                providerAvailability.put(provider, false);
-                log.warn("⚠️ 模型提供商 [{}] 不可用: {}", provider, e.getMessage());
-            }
-        }
-        log.info("LLM 模型可用性检测完成");
+            log.info("LLM 模型可用性检测完成");
+        });
     }
 
     public ChatModel createChatModel(String provider, String modelName, Double temperature, Integer maxTokens) {
@@ -114,20 +118,7 @@ public class LLMService implements ApplicationRunner {
 
     private String getApiKey(String provider) {
         String adapterKey = provider.replaceAll("Adapter$", "").toLowerCase();
-        String apiKey = llmProviderConfigService.getApiKey(adapterKey);
-        if (apiKey == null || apiKey.isBlank()) {
-            String envKey = switch (adapterKey) {
-                case "openai" -> System.getenv("OPENAI_API_KEY");
-                case "deepseek" -> System.getenv("DEEPSEEK_API_KEY");
-                case "qwen" -> System.getenv("DASHSCOPE_API_KEY");
-                case "anthropic" -> System.getenv("ANTHROPIC_API_KEY");
-                default -> null;
-            };
-            if (envKey != null && !envKey.isBlank()) {
-                apiKey = envKey;
-            }
-        }
-        return apiKey;
+        return llmProviderConfigService.getApiKey(adapterKey);
     }
 
     private boolean isApiKeyConfigured(String apiKey) {
@@ -138,6 +129,9 @@ public class LLMService implements ApplicationRunner {
      * 检查提供商是否配置存在且API Key有效
      */
     public boolean isProviderAvailable(String provider) {
+        if (provider == null || provider.isBlank()) {
+            return false;
+        }
         for (Map.Entry<String, ModelAdapter> entry : modelAdapterMap.entrySet()) {
             String adapterName = entry.getKey();
             String adapterKey = adapterName.replaceAll("Adapter$", "").toLowerCase();
@@ -158,5 +152,44 @@ public class LLMService implements ApplicationRunner {
      */
     public Map<String, Boolean> getAllProviderAvailability() {
         return new ConcurrentHashMap<>(providerAvailability);
+    }
+
+    /**
+     * 刷新指定提供商的模型缓存（保存配置后调用）
+     */
+    public void refreshProviderConfig(String provider) {
+        final String normalized = provider.trim().toLowerCase();
+        String adapterNameTemp = null;
+        for (Map.Entry<String, ModelAdapter> entry : modelAdapterMap.entrySet()) {
+            String key = entry.getKey().replaceAll("Adapter$", "").toLowerCase();
+            if (key.equals(normalized) || entry.getKey().equalsIgnoreCase(provider)) {
+                adapterNameTemp = entry.getKey();
+                break;
+            }
+        }
+        if (adapterNameTemp == null) {
+            log.warn("未找到匹配的模型适配器: {}", provider);
+            return;
+        }
+        final String adapterName = adapterNameTemp;
+
+        chatModelCache.keySet().removeIf(key -> key.startsWith(normalized + ":") || key.startsWith(adapterName + ":"));
+        streamingModelCache.keySet().removeIf(key -> key.startsWith(normalized + ":") || key.startsWith(adapterName + ":"));
+        providerAvailability.remove(adapterName);
+        log.info("已刷新模型提供商 [{}] 的缓存", provider);
+
+        String apiKey = getApiKey(provider);
+        if (isApiKeyConfigured(apiKey)) {
+            try {
+                ModelAdapter adapter = getAdapter(provider);
+                ChatModel testModel = adapter.createChatModel(apiKey, null, HEALTH_CHECK_TEMPERATURE, HEALTH_CHECK_MAX_TOKENS);
+                testModel.chat("Hello");
+                providerAvailability.put(adapterName, true);
+                log.info("✅ 模型提供商 [{}] 配置更新后验证通过", provider);
+            } catch (Exception e) {
+                providerAvailability.put(adapterName, false);
+                log.warn("⚠️ 模型提供商 [{}] 配置更新后验证失败: {}", provider, e.getMessage());
+            }
+        }
     }
 }

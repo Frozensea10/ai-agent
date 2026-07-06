@@ -4,7 +4,6 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
@@ -12,7 +11,6 @@ import static com.agent.core.llm.adapter.LlmAdapterConstants.*;
 import static dev.langchain4j.model.openai.OpenAiChatModelName.GPT_4_O;
 import static dev.langchain4j.model.openai.OpenAiChatModelName.GPT_4_O_MINI;
 
-@Component
 public class OpenAiAdapter implements ModelAdapter {
 
     private static final String MODEL_GPT_4O = "gpt-4o";

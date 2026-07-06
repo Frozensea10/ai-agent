@@ -23,11 +23,18 @@ public final class LlmAdapterConstants {
     public static final String PROVIDER_QWEN = "qwen";
     public static final String PROVIDER_ANTHROPIC = "anthropic";
 
-    public static final String MODEL_DEEPSEEK_CHAT = "deepseek-chat";
+    public static final String MODEL_DEEPSEEK_CHAT = "deepseek-v4-flash";
+    public static final String MODEL_DEEPSEEK_PRO = "deepseek-v4-pro";
     public static final String MODEL_QWEN_TURBO = "qwen-turbo";
     public static final String MODEL_CLAUDE_SONNET = "claude-3-sonnet-20240229";
 
     public static final String DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
+
+    public static final String OPENAI_EMBEDDING_URL = "https://api.openai.com/v1";
+    public static final String DEEPSEEK_EMBEDDING_URL = "https://api.deepseek.com/v1";
+    public static final String DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+    // DeepSeek 官方不提供 Embedding API（/v1/embeddings 端点返回 404），
+    // 因此不提供 DEEPSEEK_EMBEDDING_MODEL 常量。如需嵌入能力请使用 OpenAI 或其他支持的提供商。
 
     private static final Map<String, Float> TEMPERATURE_CACHE = new ConcurrentHashMap<>();
 

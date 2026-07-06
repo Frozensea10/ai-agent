@@ -238,6 +238,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Bell, Setting, Star, InfoFilled, Cpu } from '@element-plus/icons-vue'
 import { listModelProviders, saveModelProvider, type LlmProviderConfig } from '@/api/settings'
+import { providerLabelMap } from '@/utils/provider'
 
 const activeTab = ref('profile')
 
@@ -252,16 +253,16 @@ const settingTabs = [
 
 const modelProviderNames = ['openai', 'deepseek', 'qwen', 'anthropic']
 
-const modelProviders = reactive<LlmProviderConfig[]>([])
+const modelProviders = ref<LlmProviderConfig[]>([])
 
 const loadModelProviders = async () => {
   try {
     const list = await listModelProviders()
     const map = new Map(list.map(item => [item.providerName, item]))
-    modelProviders.splice(0, modelProviders.length)
+    modelProviders.value.splice(0, modelProviders.value.length)
     for (const name of modelProviderNames) {
       const existing = map.get(name)
-      modelProviders.push({
+      modelProviders.value.push({
         providerName: name,
         apiKey: existing?.apiKey || '',
         modelName: existing?.modelName || '',
@@ -274,13 +275,7 @@ const loadModelProviders = async () => {
 }
 
 const providerLabel = (name: string) => {
-  const labels: Record<string, string> = {
-    openai: 'OpenAI',
-    deepseek: 'DeepSeek',
-    qwen: '通义千问',
-    anthropic: 'Anthropic'
-  }
-  return labels[name] || name
+  return providerLabelMap[name] || name
 }
 
 const saveProvider = async (provider: LlmProviderConfig) => {
@@ -325,10 +320,14 @@ const preferenceForm = reactive({
   language: 'zh-CN'
 })
 
+// TODO: 后端暂未提供「更新个人资料」接口（PUT /v1/user/profile），
+// 接口就绪后替换为真实请求，例如：await updateProfile(profileForm)
 const saveProfile = () => {
-  ElMessage.success('个人资料已保存')
+  ElMessage.warning('个人资料修改功能开发中，暂未生效')
 }
 
+// TODO: 后端暂未提供「修改密码」接口（PUT /v1/user/password），
+// 接口就绪后替换为真实请求，例如：await changePassword(passwordForm)
 const savePassword = () => {
   if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
     ElMessage.warning('请填写完整密码信息')
@@ -338,14 +337,15 @@ const savePassword = () => {
     ElMessage.warning('两次输入的新密码不一致')
     return
   }
-  ElMessage.success('密码修改成功')
+  ElMessage.warning('密码修改功能开发中，暂未生效')
   passwordForm.oldPassword = ''
   passwordForm.newPassword = ''
   passwordForm.confirmPassword = ''
 }
 
+// TODO: 偏好设置暂未持久化到后端，接口就绪后替换为真实请求
 const savePreferences = () => {
-  ElMessage.success('偏好设置已保存')
+  ElMessage.warning('偏好设置功能开发中，暂未生效')
 }
 </script>
 

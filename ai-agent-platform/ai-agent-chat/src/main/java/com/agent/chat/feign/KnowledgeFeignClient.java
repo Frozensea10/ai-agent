@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.List;
 
-@FeignClient(name = "ai-agent-knowledge", url = "http://localhost:8084", path = "/api/v1/knowledge-bases")
+@FeignClient(name = "ai-agent-knowledge", url = "${feign.client.url.knowledge-service:http://localhost:8084}", path = "/api/v1/knowledge-bases", fallbackFactory = KnowledgeFeignClientFallbackFactory.class)
 public interface KnowledgeFeignClient {
 
     @GetMapping("/{id}")
@@ -55,6 +55,7 @@ public interface KnowledgeFeignClient {
         private String kbCode;
         private String description;
         private String embeddingModel;
+        private String embeddingProvider;
         private Integer documentCount;
         private Integer status;
     }

@@ -18,4 +18,8 @@ public class SendMessageRequest {
     private String kbCode;
 
     private String sessionId;
+
+    private String modelProvider;
+
+    private String modelName;
 }

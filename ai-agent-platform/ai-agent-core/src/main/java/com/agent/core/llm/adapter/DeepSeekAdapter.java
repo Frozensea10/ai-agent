@@ -4,13 +4,11 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
 import static com.agent.core.llm.adapter.LlmAdapterConstants.*;
 
-@Component
 public class DeepSeekAdapter implements ModelAdapter {
 
     @Override
@@ -23,7 +21,7 @@ public class DeepSeekAdapter implements ModelAdapter {
         return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(DEEPSEEK_BASE_URL)
-                .modelName(modelName != null ? modelName : MODEL_DEEPSEEK_CHAT)
+                .modelName(resolveModelName(modelName))
                 .temperature(temperature != null ? temperature : DEFAULT_TEMPERATURE)
                 .maxTokens(maxTokens != null ? maxTokens : DEFAULT_MAX_TOKENS)
                 .timeout(Duration.ofSeconds(DEFAULT_TIMEOUT_SECONDS))
@@ -36,10 +34,21 @@ public class DeepSeekAdapter implements ModelAdapter {
         return OpenAiStreamingChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(DEEPSEEK_BASE_URL)
-                .modelName(modelName != null ? modelName : MODEL_DEEPSEEK_CHAT)
+                .modelName(resolveModelName(modelName))
                 .temperature(temperature != null ? temperature : DEFAULT_TEMPERATURE)
                 .maxTokens(maxTokens != null ? maxTokens : DEFAULT_MAX_TOKENS)
                 .timeout(Duration.ofSeconds(DEFAULT_TIMEOUT_SECONDS))
                 .build();
+    }
+
+    private String resolveModelName(String modelName) {
+        if (modelName == null || modelName.isBlank()) {
+            return MODEL_DEEPSEEK_CHAT;
+        }
+        return switch (modelName.toLowerCase()) {
+            case "deepseek-v4-pro" -> MODEL_DEEPSEEK_PRO;
+            case "deepseek-v4-flash" -> MODEL_DEEPSEEK_CHAT;
+            default -> modelName;
+        };
     }
 }

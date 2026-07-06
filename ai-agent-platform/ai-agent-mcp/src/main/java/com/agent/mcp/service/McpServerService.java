@@ -9,6 +9,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -38,6 +39,7 @@ public class McpServerService {
         return convertToDTO(server);
     }
 
+    @Transactional
     public McpServerDTO createServer(McpServerDTO dto) {
         McpServer server = new McpServer();
         server.setServerName(dto.getServerName());
@@ -57,6 +59,7 @@ public class McpServerService {
         return convertToDTO(server);
     }
 
+    @Transactional
     public boolean updateServer(Long id, McpServerDTO dto) {
         McpServer server = mcpServerMapper.selectById(id);
         if (server == null) {
@@ -83,6 +86,7 @@ public class McpServerService {
         return true;
     }
 
+    @Transactional
     public boolean deleteServer(Long id) {
         McpServer server = mcpServerMapper.selectById(id);
         if (server == null) {

@@ -10,6 +10,8 @@ server:
 spring:
   application:
     name: mcp-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   main:
     allow-bean-definition-overriding: true
   cloud:
@@ -21,7 +23,7 @@ spring:
           enabled: false
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/ai_agent?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/ai_agent?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai
     username: ai_agent
     password: ${MYSQL_PASSWORD:ai_agent123}
   redis:
@@ -37,8 +39,8 @@ spring:
       enabled: true
 
 jwt:
-  # 生产环境请务必通过环境变量 JWT_SECRET 覆盖，不要使用默认值
-  secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
+  # 必须通过环境变量 JWT_SECRET 提供（>=32 字符），不提供默认值以防误用弱密钥
+  secret: ${JWT_SECRET}
 
 mybatis-plus:
   configuration:
@@ -53,4 +55,4 @@ mybatis-plus:
 
 logging:
   level:
-    com.agent.mcp: debug
+    com.agent.mcp: info

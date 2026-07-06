@@ -193,7 +193,7 @@ class UserServiceTest {
 
         when(userMapper.selectById(1L)).thenReturn(user);
 
-        UserVO userVO = userService.getUserProfile(1L);
+        UserVO userVO = userService.getUserProfile(1L, 1L);
 
         assertThat(userVO).isNotNull();
         assertThat(userVO.getUsername()).isEqualTo("testuser");
@@ -204,7 +204,7 @@ class UserServiceTest {
     void shouldThrowExceptionWhenUserNotFound() {
         when(userMapper.selectById(999L)).thenReturn(null);
 
-        assertThatThrownBy(() -> userService.getUserProfile(999L))
+        assertThatThrownBy(() -> userService.getUserProfile(999L, 999L))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> {
                     BusinessException be = (BusinessException) ex;

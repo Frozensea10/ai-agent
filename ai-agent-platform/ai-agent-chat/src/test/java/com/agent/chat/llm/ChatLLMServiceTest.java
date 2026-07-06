@@ -174,13 +174,13 @@ class ChatLLMServiceTest {
             return null;
         }).when(streamingChatModel).chat(anyList(), any(StreamingChatResponseHandler.class));
 
-        Flux<String> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
+        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
 
         StepVerifier.create(flux)
-                .expectNextMatches(s -> s.contains("\"type\":\"start\""))
-                .expectNextMatches(s -> s.contains("AI "))
-                .expectNextMatches(s -> s.contains("流式回复"))
-                .expectNextMatches(s -> s.contains("\"type\":\"end\""))
+                .expectNextMatches(sse -> "start".equals(sse.getType()))
+                .expectNextMatches(sse -> "AI ".equals(sse.getDelta()))
+                .expectNextMatches(sse -> "流式回复".equals(sse.getDelta()))
+                .expectNextMatches(sse -> "end".equals(sse.getType()))
                 .verifyComplete();
 
         verify(messageService).saveAssistantMessage(eq(SESSION_ID), eq("AI 流式回复"), eq("gpt-4o-mini"), any());
@@ -206,11 +206,11 @@ class ChatLLMServiceTest {
             return null;
         }).when(streamingChatModel).chat(anyList(), any(StreamingChatResponseHandler.class));
 
-        Flux<String> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, ragContext, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
+        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, ragContext, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
 
         StepVerifier.create(flux)
                 .expectNextCount(1)
-                .expectNextMatches(s -> s.contains("\"type\":\"end\""))
+                .expectNextMatches(sse -> "end".equals(sse.getType()))
                 .verifyComplete();
     }
 
@@ -226,11 +226,11 @@ class ChatLLMServiceTest {
             return null;
         }).when(streamingChatModel).chat(anyList(), any(StreamingChatResponseHandler.class));
 
-        Flux<String> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
+        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
 
         StepVerifier.create(flux)
-                .expectNextMatches(s -> s.contains("\"type\":\"start\""))
-                .expectNextMatches(s -> s.contains("\"type\":\"error\"") || s.contains("模型调用失败"))
+                .expectNextMatches(sse -> "start".equals(sse.getType()))
+                .expectNextMatches(sse -> "error".equals(sse.getType()) || "流式对话失败: 模型调用失败".equals(sse.getDelta()))
                 .verifyComplete();
 
         verify(chatMemoryProvider, never()).addAiMessage(eq(SESSION_ID), eq(MEMORY_TYPE), eq(MAX_MESSAGES), anyString());

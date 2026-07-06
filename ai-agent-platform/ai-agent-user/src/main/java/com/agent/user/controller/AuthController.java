@@ -8,6 +8,7 @@ import com.agent.user.service.UserService;
 import com.agent.user.vo.UserVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -33,7 +34,9 @@ public class AuthController {
     }
 
     @GetMapping("/user/profile")
-    public Result<UserVO> getProfile(@RequestHeader("X-User-Id") Long userId) {
-        return Result.success(userService.getUserProfile(userId));
+    public Result<UserVO> getProfile(Authentication authentication) {
+        // 从 SecurityContext 取认证用户 ID，避免信任可被伪造的 X-User-Id 头
+        Long userId = (Long) authentication.getDetails();
+        return Result.success(userService.getUserProfile(userId, userId));
     }
 }

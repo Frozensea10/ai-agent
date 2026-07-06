@@ -26,5 +26,6 @@ public class ToolExecutionLog {
 
     private Long executeTimeMs;
 
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

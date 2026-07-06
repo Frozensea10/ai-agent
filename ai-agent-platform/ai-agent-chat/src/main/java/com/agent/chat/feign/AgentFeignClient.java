@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.List;
 
-@FeignClient(name = "ai-agent-core", url = "http://localhost:8082", path = "/api/v1/agents")
+@FeignClient(name = "ai-agent-core", url = "${feign.client.url.core-service:http://localhost:8082}", path = "/api/v1/agents", fallbackFactory = AgentFeignClientFallbackFactory.class)
 public interface AgentFeignClient {
 
     @GetMapping

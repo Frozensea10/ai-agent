@@ -29,15 +29,27 @@ export function streamChat(
   onChunk: (chunk: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
-  kbCode?: string
+  kbCode?: string,
+  modelProvider?: string,
+  modelName?: string
 ): () => void {
   const token = localStorage.getItem('token') || ''
+  // 注意：SSE 基于 GET + query 传递参数。浏览器原生 fetch 流式读取对 POST 支持有限，
+  // 且服务端 SSE 端点通常要求 GET。此处保留 GET 方案，但需注意 URL 长度限制
+  // （浏览器通常约 2KB~8KB），超长 content 应考虑改用 EventSource + POST 端点或先发送再订阅。
   let url = `/api/v1/sessions/${sessionId}/stream?content=${encodeURIComponent(content)}&agentId=${agentId}`
   if (kbCode) {
     url += `&kbCode=${encodeURIComponent(kbCode)}`
   }
+  if (modelProvider) {
+    url += `&modelProvider=${encodeURIComponent(modelProvider)}`
+  }
+  if (modelName) {
+    url += `&modelName=${encodeURIComponent(modelName)}`
+  }
 
   const controller = new AbortController()
+  let completed = false
 
   fetch(url, {
     headers: {
@@ -54,7 +66,10 @@ export function streamChat(
         } catch {
           // ignore
         }
-        onError(message)
+        if (!completed) {
+          completed = true
+          onError(message)
+        }
         return
       }
 
@@ -83,9 +98,15 @@ export function streamChat(
             } else if (parsed.type === 'content' && parsed.delta) {
               onChunk(parsed.delta)
             } else if (parsed.type === 'error') {
-              onError(parsed.delta || '流式响应错误')
+              if (!completed) {
+                completed = true
+                onError(parsed.delta || '流式响应错误')
+              }
             } else if (parsed.type === 'end') {
-              onDone()
+              if (!completed) {
+                completed = true
+                onDone()
+              }
             }
           } catch {
             onChunk(data)
@@ -93,10 +114,14 @@ export function streamChat(
         }
       }
 
-      onDone()
+      if (!completed) {
+        completed = true
+        onDone()
+      }
     })
     .catch((err) => {
-      if (err.name !== 'AbortError') {
+      if (err.name !== 'AbortError' && !completed) {
+        completed = true
         onError(err.message || 'SSE 连接异常')
       }
     })

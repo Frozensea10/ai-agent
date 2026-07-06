@@ -39,6 +39,10 @@ public class JwtUtil {
 
     @PostConstruct
     public void init() {
+        // 避免多上下文测试或重复初始化导致静态字段被覆盖产生污染
+        if (KEY != null) {
+            return;
+        }
         if (jwtSecret == null || jwtSecret.isBlank()) {
             throw new IllegalStateException(DEFAULT_SECRET_NOT_ALLOWED);
         }
@@ -72,6 +76,8 @@ public class JwtUtil {
     }
 
     public static Claims parseToken(String token) {
+        // verifyWith(KEY) 已自动根据密钥长度限制为对应的 HS 算法，
+        // 无需显式 setAllowedAlgorithms（jjwt 0.12.5 该方法签名与高版本不兼容）
         return Jwts.parser()
                 .verifyWith(KEY)
                 .build()

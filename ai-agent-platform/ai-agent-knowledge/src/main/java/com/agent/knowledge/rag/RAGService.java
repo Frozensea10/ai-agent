@@ -5,6 +5,7 @@ import com.agent.common.exception.ErrorCode;
 import com.agent.knowledge.embedding.EmbeddingService;
 import com.agent.knowledge.vector.QdrantService;
 import io.qdrant.client.grpc.Points;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,12 +25,14 @@ public class RAGService {
     @Value("${rag.similarity-threshold:0.5}")
     private float similarityThreshold;
 
-    public List<RetrievalResult> retrieve(String kbCode, String query, int topK) {
-        List<Float> queryVector = embeddingService.embed(query);
+    public List<RetrievalResult> retrieve(String kbCode, String query, int topK, String provider, String modelName) {
+        List<Float> queryVector = embeddingService.embed(query, provider, modelName);
         try {
             List<Points.ScoredPoint> results = qdrantService.search(kbCode, queryVector, topK);
             return results.stream()
                     .filter(point -> point.getScore() >= similarityThreshold)
+                    .filter(point -> point.getPayloadMap().get("content") != null
+                            && point.getPayloadMap().get("doc_id") != null)
                     .map(point -> new RetrievalResult(
                             point.getId().getUuid(),
                             point.getPayloadMap().get("content").getStringValue(),
@@ -38,7 +41,7 @@ public class RAGService {
                     ))
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.error("RAG 检索失败: kbCode={}, query={}", kbCode, query, e);
+            log.error("RAG 检索失败: kbCode={}, queryLength={}", kbCode, query == null ? 0 : query.length(), e);
             throw new BusinessException(ErrorCode.VECTOR_SERVICE_ERROR.getCode(), "检索失败: " + e.getMessage());
         }
     }
@@ -66,6 +69,7 @@ public class RAGService {
         return prompt.toString();
     }
 
+    @Data
     public static class RetrievalResult {
         private final String chunkId;
         private final String content;
@@ -78,10 +82,5 @@ public class RAGService {
             this.docId = docId;
             this.score = score;
         }
-
-        public String getChunkId() { return chunkId; }
-        public String getContent() { return content; }
-        public String getDocId() { return docId; }
-        public float getScore() { return score; }
     }
 }

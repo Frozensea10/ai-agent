@@ -31,10 +31,11 @@ public class AgentConfigService {
     private static final String DEFAULT_AGENT_TYPE = "single";
     private static final int DEFAULT_PRIORITY = 0;
     private static final int ACTIVE_STATUS = 1;
+    private static final Long SYSTEM_USER_ID = 1L;
 
     private final AgentConfigMapper agentConfigMapper;
 
-    @CacheEvict(value = CACHE_NAME, key = CACHE_KEY_PREFIX + " + #result.agentCode")
+    @CacheEvict(value = CACHE_NAME, allEntries = true)
     public AgentVO createAgent(CreateAgentRequest request, Long userId) {
         AgentConfig existing = agentConfigMapper.selectByCode(request.getAgentCode());
         if (existing != null) {
@@ -64,13 +65,13 @@ public class AgentConfigService {
         return convertToVO(config);
     }
 
-    @CacheEvict(value = CACHE_NAME, key = CACHE_KEY_PREFIX + " + #result.agentCode")
+    @CacheEvict(value = CACHE_NAME, allEntries = true)
     public AgentVO updateAgent(Long id, UpdateAgentRequest request, Long userId) {
         AgentConfig config = agentConfigMapper.selectById(id);
         if (config == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "Agent 不存在");
         }
-        if (!config.getCreatedBy().equals(userId)) {
+        if (!userId.equals(config.getCreatedBy())) {
             throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "权限不足");
         }
 
@@ -100,8 +101,12 @@ public class AgentConfigService {
         if (config == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "Agent 不存在");
         }
-        if (!config.getCreatedBy().equals(userId)) {
+        if (!userId.equals(config.getCreatedBy())) {
             throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "权限不足");
+        }
+        // 系统内置 Agent（default-assistant）不允许删除，前端 ChatView 硬编码依赖此 Agent
+        if (isSystemAgent(config)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "系统内置 Agent 不允许删除");
         }
         agentConfigMapper.deleteById(id);
     }
@@ -112,7 +117,7 @@ public class AgentConfigService {
         if (config == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "Agent 不存在");
         }
-        if (!isSystemAgent(config) && !config.getCreatedBy().equals(userId)) {
+        if (!isSystemAgent(config) && !userId.equals(config.getCreatedBy())) {
             throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "权限不足");
         }
         return convertToVO(config);
@@ -122,7 +127,7 @@ public class AgentConfigService {
     public List<AgentVO> listAgents(Long userId) {
         LambdaQueryWrapper<AgentConfig> wrapper = new LambdaQueryWrapper<>();
         wrapper.and(w -> w.eq(AgentConfig::getCreatedBy, userId)
-                        .or(w2 -> w2.eq(AgentConfig::getCreatedBy, 1)
+                        .or(w2 -> w2.eq(AgentConfig::getCreatedBy, SYSTEM_USER_ID)
                                     .eq(AgentConfig::getAgentCode, "default-assistant")))
                 .eq(AgentConfig::getDeleted, 0)
                 .orderByDesc(AgentConfig::getCreatedAt);
@@ -132,8 +137,7 @@ public class AgentConfigService {
     }
 
     private boolean isSystemAgent(AgentConfig config) {
-        Long systemUserId = 1L;
-        return systemUserId.equals(config.getCreatedBy()) || "default-assistant".equals(config.getAgentCode());
+        return SYSTEM_USER_ID.equals(config.getCreatedBy()) || "default-assistant".equals(config.getAgentCode());
     }
 
     @Cacheable(value = CACHE_NAME, key = CACHE_KEY_PREFIX + " + #agentCode")

@@ -76,10 +76,17 @@
         <el-form-item label="描述" prop="description">
           <el-input v-model="createForm.description" type="textarea" :rows="3" placeholder="知识库描述" />
         </el-form-item>
+        <el-form-item label="嵌入服务商" prop="embeddingProvider">
+          <el-select v-model="createForm.embeddingProvider" placeholder="选择嵌入服务商" style="width: 100%">
+            <el-option label="通义千问 (推荐)" value="qwen" />
+            <el-option label="OpenAI" value="openai" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="嵌入模型" prop="embeddingModel">
           <el-select v-model="createForm.embeddingModel" placeholder="选择嵌入模型" style="width: 100%">
-            <el-option label="text-embedding-3-small" value="text-embedding-3-small" />
-            <el-option label="text-embedding-3-large" value="text-embedding-3-large" />
+            <el-option label="text-embedding-v4 (通义千问)" value="text-embedding-v4" />
+            <el-option label="text-embedding-3-small (OpenAI)" value="text-embedding-3-small" />
+            <el-option label="text-embedding-3-large (OpenAI)" value="text-embedding-3-large" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -101,10 +108,17 @@
         <el-form-item label="描述" prop="description">
           <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="知识库描述" />
         </el-form-item>
+        <el-form-item label="嵌入服务商" prop="embeddingProvider">
+          <el-select v-model="editForm.embeddingProvider" placeholder="选择嵌入服务商" style="width: 100%">
+            <el-option label="通义千问 (推荐)" value="qwen" />
+            <el-option label="OpenAI" value="openai" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="嵌入模型" prop="embeddingModel">
           <el-select v-model="editForm.embeddingModel" placeholder="选择嵌入模型" style="width: 100%">
-            <el-option label="text-embedding-3-small" value="text-embedding-3-small" />
-            <el-option label="text-embedding-3-large" value="text-embedding-3-large" />
+            <el-option label="text-embedding-v4 (通义千问)" value="text-embedding-v4" />
+            <el-option label="text-embedding-3-small (OpenAI)" value="text-embedding-3-small" />
+            <el-option label="text-embedding-3-large (OpenAI)" value="text-embedding-3-large" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -174,6 +188,7 @@ const createForm = reactive({
   kbName: '',
   kbCode: '',
   description: '',
+  embeddingProvider: 'openai',
   embeddingModel: 'text-embedding-3-small'
 })
 
@@ -181,6 +196,7 @@ const editForm = reactive({
   kbCode: '',
   kbName: '',
   description: '',
+  embeddingProvider: 'openai',
   embeddingModel: 'text-embedding-3-small'
 })
 
@@ -206,9 +222,9 @@ const filteredKnowledgeBases = computed(() => {
 const loadKnowledgeBases = async () => {
   try {
     const res = await getKnowledgeBases()
-    knowledgeBases.value = res.data
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载知识库失败')
+    knowledgeBases.value = res || []
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : '加载知识库失败')
   }
 }
 
@@ -223,8 +239,8 @@ const handleCreate = async () => {
         showCreateDialog.value = false
         createFormRef.value?.resetFields()
         await loadKnowledgeBases()
-      } catch (error: any) {
-        ElMessage.error(error.message || '创建失败')
+      } catch (error: unknown) {
+        ElMessage.error(error instanceof Error ? error.message : '创建失败')
       } finally {
         creating.value = false
       }
@@ -237,6 +253,7 @@ const openEditDialog = (kb: KnowledgeBase) => {
   editForm.kbCode = kb.kbCode
   editForm.kbName = kb.kbName
   editForm.description = kb.description || ''
+  editForm.embeddingProvider = kb.embeddingProvider || 'openai'
   editForm.embeddingModel = kb.embeddingModel || 'text-embedding-3-small'
   showEditDialog.value = true
 }
@@ -252,8 +269,8 @@ const handleEdit = async () => {
         ElMessage.success('更新成功')
         showEditDialog.value = false
         await loadKnowledgeBases()
-      } catch (error: any) {
-        ElMessage.error(error.message || '更新失败')
+      } catch (error: unknown) {
+        ElMessage.error(error instanceof Error ? error.message : '更新失败')
       } finally {
         editing.value = false
       }
@@ -278,8 +295,8 @@ const handleCommand = (command: string, kb: KnowledgeBase) => {
         await deleteKnowledgeBase(kb.id)
         ElMessage.success('删除成功')
         await loadKnowledgeBases()
-      } catch (error: any) {
-        ElMessage.error(error.message || '删除失败')
+      } catch (error: unknown) {
+        ElMessage.error(error instanceof Error ? error.message : '删除失败')
       }
     })
   }
@@ -302,8 +319,8 @@ const handleUpload = async () => {
     selectedFile.value = null
     uploadRef.value?.clearFiles()
     await loadKnowledgeBases()
-  } catch (error: any) {
-    ElMessage.error(error.message || '上传失败')
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : '上传失败')
   } finally {
     uploading.value = false
   }

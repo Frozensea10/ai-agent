@@ -44,22 +44,22 @@ public class SubTask {
     /**
      * 任务执行结果（运行时填充）
      */
-    private String result;
+    private volatile String result;
 
     /**
      * 任务状态（运行时填充）
      */
-    private String status = "pending";
+    private volatile String status = "pending";
 
     /**
      * 执行耗时ms（运行时填充）
      */
-    private Long executionTimeMs;
+    private volatile Long executionTimeMs;
 
     /**
      * 分配的Agent ID（运行时填充）
      */
-    private Long assignedAgentId;
+    private volatile Long assignedAgentId;
 
     public void addDependent(SubTask task) {
         this.dependents.add(task);

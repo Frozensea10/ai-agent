@@ -24,7 +24,6 @@ import java.nio.charset.StandardCharsets;
 public class DocumentParser {
 
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-    private static final String CHARSET_GBK = "GBK";
     private static final int UTF8_BOM_LENGTH = 3;
     private static final byte UTF8_BOM_0 = (byte) 0xEF;
     private static final byte UTF8_BOM_1 = (byte) 0xBB;
@@ -107,25 +106,26 @@ public class DocumentParser {
     }
 
     private EncodingResult detectEncoding(MultipartFile file) {
-        try {
-            byte[] bytes = file.getBytes();
-            if (bytes.length >= UTF8_BOM_LENGTH && bytes[0] == UTF8_BOM_0 && bytes[1] == UTF8_BOM_1 && bytes[2] == UTF8_BOM_2) {
-                return new EncodingResult(StandardCharsets.UTF_8, UTF8_BOM_LENGTH);
-            }
-            if (bytes.length >= 2 && bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF) {
-                return new EncodingResult(StandardCharsets.UTF_16BE, 2);
-            }
-            if (bytes.length >= 2 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) {
-                return new EncodingResult(StandardCharsets.UTF_16LE, 2);
-            }
-            String utf8Test = new String(bytes, StandardCharsets.UTF_8);
-            if (!StandardCharsets.UTF_8.newEncoder().canEncode(utf8Test)) {
-                return new EncodingResult(Charset.forName(CHARSET_GBK), 0);
-            }
-            return new EncodingResult(StandardCharsets.UTF_8, 0);
+        byte[] bom = new byte[4];
+        int read;
+        try (InputStream inputStream = file.getInputStream()) {
+            read = inputStream.read(bom);
         } catch (IOException e) {
             return new EncodingResult(StandardCharsets.UTF_8, 0);
         }
+        if (read < 0) {
+            return new EncodingResult(StandardCharsets.UTF_8, 0);
+        }
+        if (read >= UTF8_BOM_LENGTH && bom[0] == UTF8_BOM_0 && bom[1] == UTF8_BOM_1 && bom[2] == UTF8_BOM_2) {
+            return new EncodingResult(StandardCharsets.UTF_8, UTF8_BOM_LENGTH);
+        }
+        if (read >= 2 && bom[0] == (byte) 0xFE && bom[1] == (byte) 0xFF) {
+            return new EncodingResult(StandardCharsets.UTF_16BE, 2);
+        }
+        if (read >= 2 && bom[0] == (byte) 0xFF && bom[1] == (byte) 0xFE) {
+            return new EncodingResult(StandardCharsets.UTF_16LE, 2);
+        }
+        return new EncodingResult(StandardCharsets.UTF_8, 0);
     }
 
     private static class EncodingResult {

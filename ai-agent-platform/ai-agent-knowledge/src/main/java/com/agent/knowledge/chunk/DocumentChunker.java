@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
@@ -12,17 +13,22 @@ public class DocumentChunker {
 
     private static final int DEFAULT_CHUNK_SIZE = 500;
     private static final int DEFAULT_OVERLAP = 50;
+    private static final Pattern SENTENCE_PATTERN = Pattern.compile("(?<=[。！？.!?])");
 
     public List<String> chunk(String content, Integer chunkSize, Integer overlap) {
         int size = chunkSize != null ? chunkSize : DEFAULT_CHUNK_SIZE;
         int ovl = overlap != null ? overlap : DEFAULT_OVERLAP;
+
+        if (size <= ovl) {
+            throw new IllegalArgumentException("chunkSize 必须大于 overlap, 当前 size=" + size + ", overlap=" + ovl);
+        }
 
         List<String> chunks = new ArrayList<>();
         if (content == null || content.isBlank()) {
             return chunks;
         }
 
-        String[] sentences = content.split("(?<=[。！？.!?])");
+        String[] sentences = SENTENCE_PATTERN.split(content);
         StringBuilder currentChunk = new StringBuilder();
 
         for (String sentence : sentences) {

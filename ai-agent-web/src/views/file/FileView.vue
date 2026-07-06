@@ -101,8 +101,8 @@ const loadFiles = async () => {
   try {
     const res = await listFiles()
     fileList.value = res.data || []
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载文件列表失败')
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : '加载文件列表失败')
   } finally {
     loading.value = false
   }
@@ -117,8 +117,8 @@ const handleFileChange = async (file: UploadFile) => {
     selectedFile.value = null
     uploadRef.value?.clearFiles()
     await loadFiles()
-  } catch (error: any) {
-    ElMessage.error(error.message || '上传失败')
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : '上传失败')
   }
 }
 
@@ -132,8 +132,8 @@ const handleDelete = (file: FileRecord) => {
       await deleteFile(file.objectName)
       ElMessage.success('删除成功')
       await loadFiles()
-    } catch (error: any) {
-      ElMessage.error(error.message || '删除失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '删除失败')
     }
   })
 }
@@ -153,8 +153,8 @@ const handleDownload = async (file: FileRecord) => {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-  } catch (error: any) {
-    ElMessage.error(error.message || '下载失败')
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : '下载失败')
   }
 }
 
@@ -164,8 +164,8 @@ const handlePreview = async (file: FileRecord) => {
     const res = await getPreviewUrl(file.objectName)
     previewUrl.value = res.data
     previewVisible.value = true
-  } catch (error: any) {
-    ElMessage.error(error.message || '生成预览链接失败')
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : '生成预览链接失败')
   }
 }
 

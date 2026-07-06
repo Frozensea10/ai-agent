@@ -20,6 +20,7 @@ public class McpServer {
 
     private String status;
 
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
     @TableLogic

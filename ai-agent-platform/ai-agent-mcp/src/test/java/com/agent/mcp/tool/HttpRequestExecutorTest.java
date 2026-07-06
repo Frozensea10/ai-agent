@@ -116,9 +116,10 @@ class HttpRequestExecutorTest {
     @DisplayName("localhost 自动放行")
     void shouldAllowLocalhost() {
         HttpRequestExecutor executor = createExecutor("");
-        ToolExecuteRequest request = createRequest("http://svc.localhost/api", "GET", null, null);
+        // 修复 SSRF 后仅允许精确 localhost，不再允许 *.localhost 后缀通配
+        ToolExecuteRequest request = createRequest("http://localhost/api", "GET", null, null);
 
-        when(restTemplate.exchange(eq("http://svc.localhost/api"), eq(HttpMethod.GET), any(), eq(String.class)))
+        when(restTemplate.exchange(eq("http://localhost/api"), eq(HttpMethod.GET), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok("response"));
 
         ToolExecuteResult result = executor.execute(request);

@@ -1,6 +1,7 @@
 package com.agent.chat.controller;
 
 import com.agent.chat.dto.CreateSessionRequest;
+import com.agent.chat.dto.SSEMessage;
 import com.agent.chat.dto.SendMessageRequest;
 import com.agent.chat.entity.ChatMessage;
 import com.agent.chat.entity.ChatSession;
@@ -283,7 +284,7 @@ class ChatControllerTest {
         when(messageService.saveUserMessage(SESSION_ID, "你好")).thenReturn(createMessage("user", "你好"));
         when(chatLLMService.streamChat(anyString(), anyString(), anyString(), any(), anyString(), anyInt(),
                 any(StreamingChatModel.class), anyString()))
-                .thenReturn(Flux.just("data: {\"type\":\"start\"}\n\n", "data: {\"type\":\"content\",\"delta\":\"你好\"}\n\n"));
+                .thenReturn(Flux.just(SSEMessage.start("msg-1"), SSEMessage.content("你好")));
 
         MvcResult mvcResult = mockMvc.perform(get("/api/v1/sessions/{sessionId}/stream", SESSION_ID)
                         .header("X-User-Id", USER_ID)

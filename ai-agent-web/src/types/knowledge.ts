@@ -3,6 +3,7 @@ export interface KnowledgeBase {
   kbName: string
   kbCode: string
   description: string
+  embeddingProvider: string
   embeddingModel: string
   documentCount: number
   status: number

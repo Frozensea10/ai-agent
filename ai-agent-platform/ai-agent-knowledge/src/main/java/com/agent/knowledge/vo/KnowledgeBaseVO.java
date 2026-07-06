@@ -11,6 +11,7 @@ public class KnowledgeBaseVO {
     private String kbCode;
     private String description;
     private String embeddingModel;
+    private String embeddingProvider;
     private Integer documentCount;
     private Integer status;
     private LocalDateTime createdAt;

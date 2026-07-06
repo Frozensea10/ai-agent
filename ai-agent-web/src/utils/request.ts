@@ -4,7 +4,7 @@ import { useUserStore } from '@/stores/user'
 
 const request = axios.create({
   baseURL: '/api',
-  timeout: 30000
+  timeout: 120000
 })
 
 let isRefreshing = false
@@ -19,12 +19,15 @@ function onTokenRefreshed(newToken: string) {
   refreshSubscribers = []
 }
 
-function extractMessage(error: any): string {
-  if (error?.response?.data?.message) {
-    return error.response.data.message
-  }
-  if (error?.message) {
-    return error.message
+function extractMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    if (err.response?.data?.message) {
+      return err.response.data.message
+    }
+    if (err.message) {
+      return err.message
+    }
   }
   return '网络错误，请稍后重试'
 }
@@ -93,6 +96,9 @@ request.interceptors.response.use(
 
           throw new Error(res.data?.message || '登录已过期，请重新登录')
         } catch (refreshError) {
+          // 刷新失败时，需释放所有等待中的订阅者，避免它们永久挂起
+          refreshSubscribers.forEach(callback => callback(''))
+          refreshSubscribers = []
           userStore.logout()
           ElMessage.error(extractMessage(refreshError))
           window.location.href = '/login'

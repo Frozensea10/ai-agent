@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -36,11 +37,12 @@ public class UserService {
             this.value = value;
         }
 
-        public int getValue() {
+        public Integer getValue() {
             return value;
         }
     }
 
+    @Transactional
     public UserVO register(RegisterRequest request) {
         SysUser existing = userMapper.selectByUsername(request.getUsername());
         if (existing != null) {
@@ -65,7 +67,7 @@ public class UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED.getCode(), "用户名或密码错误");
         }
 
-        if (user.getStatus() != UserStatus.ENABLED.getValue()) {
+        if (!UserStatus.ENABLED.getValue().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
 
@@ -86,7 +88,7 @@ public class UserService {
 
         Long userId = JwtUtil.getUserId(refreshToken);
         SysUser user = userMapper.selectById(userId);
-        if (user == null || user.getStatus() != UserStatus.ENABLED.getValue()) {
+        if (user == null || !UserStatus.ENABLED.getValue().equals(user.getStatus())) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED.getCode(), "用户不存在或已被禁用");
         }
 
@@ -96,7 +98,12 @@ public class UserService {
         return buildTokenResponse(newAccessToken, newRefreshToken);
     }
 
-    public UserVO getUserProfile(Long userId) {
+    public UserVO getUserProfile(Long currentUserId, Long userId) {
+        // 越权校验：仅允许查询本人资料，管理员可通过上层权限放行后直接传入相同 ID
+        if (currentUserId == null || !currentUserId.equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN.getCode(), "无权访问该用户资料");
+        }
+
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "用户不存在");

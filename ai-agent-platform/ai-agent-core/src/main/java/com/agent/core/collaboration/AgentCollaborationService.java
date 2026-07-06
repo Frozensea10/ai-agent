@@ -189,6 +189,12 @@ public class AgentCollaborationService {
             // 检查整体超时
             if (System.currentTimeMillis() - overallStartTime > TimeUnit.SECONDS.toMillis(COLLABORATION_TIMEOUT_SECONDS)) {
                 log.error("多Agent协作整体超时，已完成 {}/{} 个任务", completedTasks.size(), subTasks.size());
+                // 取消所有未完成的 future，避免工作线程继续空转
+                for (CompletableFuture<Void> future : taskFutures.values()) {
+                    if (!future.isDone()) {
+                        future.cancel(true);
+                    }
+                }
                 break;
             }
 
@@ -243,6 +249,12 @@ public class AgentCollaborationService {
             ).get(SUB_AGENT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.error("子任务执行超时或失败", e);
+            // 取消所有未完成的 future，避免资源泄漏
+            for (CompletableFuture<Void> future : taskFutures.values()) {
+                if (!future.isDone()) {
+                    future.cancel(true);
+                }
+            }
         }
     }
 

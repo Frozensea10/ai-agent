@@ -1,5 +1,14 @@
 import request from '@/utils/request'
-import type { Result } from '@/types'
+
+export interface ToolConfigSchemaProperty {
+  type: string
+  description?: string
+}
+
+export interface ToolConfigSchema {
+  properties: Record<string, ToolConfigSchemaProperty>
+  required?: string[]
+}
 
 export interface ToolInfo {
   toolCode: string
@@ -7,7 +16,7 @@ export interface ToolInfo {
   description: string
   toolType: string
   source: string
-  configSchema?: any
+  configSchema?: ToolConfigSchema
 }
 
 export interface McpServer {
@@ -21,39 +30,39 @@ export interface McpServer {
 export interface ToolExecuteResult {
   success: boolean
   toolCode: string
-  data: any
+  data: unknown
   errorMessage: string
   executeTimeMs: number
 }
 
-export function listTools(): Promise<Result<ToolInfo[]>> {
-  return request.get('/v1/mcp/tools') as Promise<Result<ToolInfo[]>>
+export function listTools() {
+  return request.get<ToolInfo[]>('/v1/mcp/tools').then(res => res.data)
 }
 
-export function listMcpServers(): Promise<Result<McpServer[]>> {
-  return request.get('/v1/mcp/servers') as Promise<Result<McpServer[]>>
+export function listMcpServers() {
+  return request.get<McpServer[]>('/v1/mcp/servers').then(res => res.data)
 }
 
-export function createMcpServer(data: McpServer): Promise<Result<McpServer>> {
-  return request.post('/v1/mcp/servers', data) as Promise<Result<McpServer>>
+export function createMcpServer(data: McpServer) {
+  return request.post<McpServer>('/v1/mcp/servers', data).then(res => res.data)
 }
 
-export function updateMcpServer(id: number, data: McpServer): Promise<Result<void>> {
-  return request.put(`/v1/mcp/servers/${id}`, data) as Promise<Result<void>>
+export function updateMcpServer(id: number, data: McpServer) {
+  return request.put<McpServer>(`/v1/mcp/servers/${id}`, data).then(res => res.data)
 }
 
-export function deleteMcpServer(id: number): Promise<Result<void>> {
-  return request.delete(`/v1/mcp/servers/${id}`) as Promise<Result<void>>
+export function deleteMcpServer(id: number) {
+  return request.delete(`/v1/mcp/servers/${id}`).then(res => res.data)
 }
 
-export function updateMcpServerStatus(id: number, status: string): Promise<Result<void>> {
-  return request.put(`/v1/mcp/servers/${id}/status`, { status }) as Promise<Result<void>>
+export function updateMcpServerStatus(id: number, status: string) {
+  return request.put(`/v1/mcp/servers/${id}/status`, { status }).then(res => res.data)
 }
 
-export function getServerConnectionStatus(): Promise<Result<Record<string, string>>> {
-  return request.get('/v1/mcp/servers/status') as Promise<Result<Record<string, string>>>
+export function getServerConnectionStatus() {
+  return request.get<Record<string, string>>('/v1/mcp/servers/status').then(res => res.data)
 }
 
-export function executeTool(toolCode: string, parameters: Record<string, any>): Promise<Result<ToolExecuteResult>> {
-  return request.post(`/v1/mcp/tools/${toolCode}/execute`, parameters) as Promise<Result<ToolExecuteResult>>
+export function executeTool(toolCode: string, parameters: Record<string, unknown>) {
+  return request.post<ToolExecuteResult>(`/v1/mcp/tools/${toolCode}/execute`, parameters).then(res => res.data)
 }

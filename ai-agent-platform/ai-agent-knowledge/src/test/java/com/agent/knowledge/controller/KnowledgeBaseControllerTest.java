@@ -94,7 +94,7 @@ class KnowledgeBaseControllerTest {
     @DisplayName("create: 创建知识库成功")
     void create_shouldReturnSuccess() throws Exception {
         KnowledgeBaseVO vo = createKnowledgeBaseVO(KB_ID, "test-kb", "Test KB");
-        when(knowledgeBaseService.createKnowledgeBase(anyString(), anyString(), anyString(), anyString(), eq(USER_ID)))
+        when(knowledgeBaseService.createKnowledgeBase(anyString(), anyString(), anyString(), anyString(), any(), eq(USER_ID)))
                 .thenReturn(vo);
 
         KnowledgeBaseController.CreateKBRequest request = new KnowledgeBaseController.CreateKBRequest();
@@ -175,7 +175,7 @@ class KnowledgeBaseControllerTest {
     @DisplayName("update: 更新知识库成功")
     void update_shouldReturnSuccess() throws Exception {
         KnowledgeBaseVO vo = createKnowledgeBaseVO(KB_ID, "test-kb", "Updated KB");
-        when(knowledgeBaseService.updateKnowledgeBase(eq(KB_ID), anyString(), anyString(), anyString(), eq(USER_ID)))
+        when(knowledgeBaseService.updateKnowledgeBase(eq(KB_ID), anyString(), anyString(), anyString(), any(), eq(USER_ID)))
                 .thenReturn(vo);
 
         KnowledgeBaseController.UpdateKBRequest request = new KnowledgeBaseController.UpdateKBRequest();
@@ -195,7 +195,7 @@ class KnowledgeBaseControllerTest {
     @Test
     @DisplayName("update: 非创建者更新返回 403")
     void update_shouldReturnForbidden() throws Exception {
-        when(knowledgeBaseService.updateKnowledgeBase(eq(KB_ID), anyString(), anyString(), anyString(), eq(USER_ID)))
+        when(knowledgeBaseService.updateKnowledgeBase(eq(KB_ID), anyString(), anyString(), anyString(), any(), eq(USER_ID)))
                 .thenThrow(new BusinessException(ErrorCode.FORBIDDEN.getCode(), "无权更新该知识库"));
 
         KnowledgeBaseController.UpdateKBRequest request = new KnowledgeBaseController.UpdateKBRequest();

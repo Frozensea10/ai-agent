@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Sinks;
+import reactor.core.publisher.FluxSink;
 
 import java.util.List;
 import java.util.Map;
@@ -55,6 +55,9 @@ public class ChatLLMService {
 
         ChatResponse response = chatModel.chat(history);
         String content = response.aiMessage().text();
+        if (content == null) {
+            content = "";
+        }
 
         String processedContent = processToolCalls(content);
 
@@ -62,99 +65,86 @@ public class ChatLLMService {
         return processedContent;
     }
 
-    public Flux<String> streamChat(String sessionId, String message, String systemPrompt,
+    public Flux<SSEMessage> streamChat(String sessionId, String message, String systemPrompt,
                                    String ragContext, String memoryType, Integer maxMessages,
                                    StreamingChatModel streamingModel,
                                    String modelName) {
-        Sinks.Many<String> sink = Sinks.many().unicast().onBackpressureBuffer();
-        AtomicBoolean cancelled = new AtomicBoolean(false);
         String messageId = MessageIdGenerator.generate();
-        StringBuilder fullResponse = new StringBuilder();
+        AtomicBoolean cancelled = new AtomicBoolean(false);
 
-        try {
-            sink.tryEmitNext(toJson(SSEMessage.start(messageId)));
-        } catch (Exception e) {
-            log.error("发送 start 消息失败", e);
-        }
+        return Flux.<SSEMessage>create(sink -> {
+            StringBuilder fullResponse = new StringBuilder();
 
-        chatMemoryProvider.addUserMessage(sessionId, memoryType, maxMessages, message);
-        List<ChatMessage> history = chatMemoryProvider.getMessages(sessionId, memoryType, maxMessages);
+            try {
+                sink.next(SSEMessage.start(messageId));
 
-        String prompt = buildSystemPrompt(systemPrompt, ragContext);
-        if (prompt != null && !prompt.isBlank()) {
-            history.add(0, SystemMessage.from(prompt));
-        }
+                chatMemoryProvider.addUserMessage(sessionId, memoryType, maxMessages, message);
+                List<ChatMessage> history = chatMemoryProvider.getMessages(sessionId, memoryType, maxMessages);
 
-        streamingModel.chat(history, new StreamingChatResponseHandler() {
-            @Override
-            public void onPartialResponse(String partialResponse) {
-                if (cancelled.get()) return;
-                fullResponse.append(partialResponse);
-                try {
-                    sink.tryEmitNext(toJson(SSEMessage.content(partialResponse)));
-                } catch (Exception e) {
-                    log.error("发送 content 消息失败", e);
-                }
-            }
-
-            @Override
-            public void onCompleteResponse(ChatResponse completeResponse) {
-                if (cancelled.get()) return;
-                String content = completeResponse.aiMessage().text();
-
-                String processedContent = processToolCallsInStream(content, sink);
-                if (processedContent == null) {
-                    processedContent = content;
+                String prompt = buildSystemPrompt(systemPrompt, ragContext);
+                if (prompt != null && !prompt.isBlank()) {
+                    history.add(0, SystemMessage.from(prompt));
                 }
 
-                chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, processedContent);
+                streamingModel.chat(history, new StreamingChatResponseHandler() {
+                    @Override
+                    public void onPartialResponse(String partialResponse) {
+                        if (cancelled.get()) return;
+                        fullResponse.append(partialResponse);
+                        sink.next(SSEMessage.content(partialResponse));
+                    }
 
-                Integer promptTokens = completeResponse.tokenUsage() != null ? completeResponse.tokenUsage().inputTokenCount() : null;
-                Integer completionTokens = completeResponse.tokenUsage() != null ? completeResponse.tokenUsage().outputTokenCount() : null;
-                Integer totalTokens = completeResponse.tokenUsage() != null ? completeResponse.tokenUsage().totalTokenCount() : null;
+                    @Override
+                    public void onCompleteResponse(ChatResponse completeResponse) {
+                        if (cancelled.get()) return;
+                        try {
+                            String content = completeResponse.aiMessage().text();
 
-                SSEMessage.Usage usage = new SSEMessage.Usage();
-                usage.setPromptTokens(promptTokens);
-                usage.setCompletionTokens(completionTokens);
-                usage.setTotalTokens(totalTokens);
+                            String processedContent = processToolCallsInStream(content, sink);
+                            if (processedContent == null) {
+                                processedContent = content;
+                            }
 
-                messageService.saveAssistantMessage(sessionId, processedContent, modelName, totalTokens);
+                            chatMemoryProvider.addAiMessage(sessionId, memoryType, maxMessages, processedContent);
 
-                try {
-                    sink.tryEmitNext(toJson(SSEMessage.end(messageId, usage)));
-                    sink.tryEmitComplete();
-                } catch (Exception e) {
-                    log.error("发送 end 消息失败", e);
-                    sink.tryEmitError(e);
-                }
+                            Integer promptTokens = completeResponse.tokenUsage() != null ? completeResponse.tokenUsage().inputTokenCount() : null;
+                            Integer completionTokens = completeResponse.tokenUsage() != null ? completeResponse.tokenUsage().outputTokenCount() : null;
+                            Integer totalTokens = completeResponse.tokenUsage() != null ? completeResponse.tokenUsage().totalTokenCount() : null;
+
+                            SSEMessage.Usage usage = new SSEMessage.Usage();
+                            usage.setPromptTokens(promptTokens);
+                            usage.setCompletionTokens(completionTokens);
+                            usage.setTotalTokens(totalTokens);
+
+                            messageService.saveAssistantMessage(sessionId, processedContent, modelName, totalTokens);
+
+                            sink.next(SSEMessage.end(messageId, usage));
+                        } catch (Exception e) {
+                            log.error("处理完整响应失败", e);
+                        } finally {
+                            sink.complete();
+                        }
+                    }
+
+                    @Override
+                    public void onError(Throwable error) {
+                        log.error("流式对话错误", error);
+                        sink.error(error);
+                    }
+                });
+            } catch (Exception e) {
+                log.error("流式对话执行异常", e);
+                sink.error(e);
             }
-
-            @Override
-            public void onError(Throwable error) {
-                log.error("流式对话错误", error);
-                emitErrorAndComplete(sink, error.getMessage());
-            }
-        });
-
-        return sink.asFlux()
+        }, FluxSink.OverflowStrategy.BUFFER)
                 .doOnCancel(() -> {
                     cancelled.set(true);
                     log.info("流式对话被取消: sessionId={}", sessionId);
                 })
                 .onErrorResume(error -> {
                     log.error("流式对话异常", error);
-                    return Flux.just(toJson(SSEMessage.error("流式对话失败: " + error.getMessage())));
+                    return Flux.just(SSEMessage.error("流式对话失败: " + error.getMessage()));
                 });
-    }
-
-    private void emitErrorAndComplete(Sinks.Many<String> sink, String message) {
-        try {
-            sink.tryEmitNext(toJson(SSEMessage.error(message)));
-            sink.tryEmitComplete();
-        } catch (Exception e) {
-            log.error("发送 error 消息失败", e);
-            sink.tryEmitError(e);
-        }
     }
 
     private String processToolCalls(String content) {
@@ -183,7 +173,7 @@ public class ChatLLMService {
         return result.toString();
     }
 
-    private String processToolCallsInStream(String content, Sinks.Many<String> sink) {
+    private String processToolCallsInStream(String content, FluxSink<SSEMessage> sink) {
         Matcher matcher = TOOL_CALL_PATTERN.matcher(content);
         if (!matcher.find()) {
             return null;
@@ -201,14 +191,14 @@ public class ChatLLMService {
             log.info("流式对话中检测到工具调用: toolName={}, arguments={}", toolName, arguments);
 
             try {
-                sink.tryEmitNext(toJson(SSEMessage.toolCall(toolName, arguments)));
+                sink.next(SSEMessage.toolCall(toolName, arguments));
 
                 Map<String, Object> params = objectMapper.readValue(arguments, MAP_TYPE_REFERENCE);
                 Result<ToolExecuteResult> toolResult = mcpFeignClient.executeTool(toolName, params);
 
                 String toolResultStr = buildToolResultString(toolResult);
 
-                sink.tryEmitNext(toJson(SSEMessage.toolResult(toolName, toolResultStr)));
+                sink.next(SSEMessage.toolResult(toolName, toolResultStr));
 
                 String replacement = "\n[工具执行结果]\n" + toolResultStr + "\n";
                 result.replace(matcher.start(), matcher.end(), replacement);
@@ -253,17 +243,13 @@ public class ChatLLMService {
             if (prompt.length() > 0) {
                 prompt.append("\n\n");
             }
-            prompt.append("以下是与用户问题相关的参考信息:\n\n").append(ragContext).append("\n\n请基于以上参考信息回答用户问题。如果参考信息不足以回答问题，请明确说明。");
+            prompt.append("以下是与用户问题相关的参考信息，请严格基于这些信息回答，禁止忽略或编造:\n\n").append(ragContext).append("\n\n");
+            prompt.append("回答要求：\n");
+            prompt.append("1. 你必须优先基于上述参考信息回答用户问题。\n");
+            prompt.append("2. 如果参考信息足以回答，请直接给出答案。\n");
+            prompt.append("3. 如果参考信息不足，请明确说明\"根据提供的参考信息无法回答该问题\"。\n");
+            prompt.append("4. 不要回答\"没有收到文件\"或\"没有看到知识库\"，因为参考信息已经提供。");
         }
         return prompt.toString();
-    }
-
-    private String toJson(SSEMessage message) {
-        try {
-            return "data: " + objectMapper.writeValueAsString(message) + "\n\n";
-        } catch (Exception e) {
-            log.error("序列化 SSEMessage 失败", e);
-            return "data: {}\n\n";
-        }
     }
 }

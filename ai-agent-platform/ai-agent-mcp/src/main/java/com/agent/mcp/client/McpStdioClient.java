@@ -16,6 +16,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * MCP Stdio 客户端（标准输入输出传输模式）
  * 通过启动子进程，使用标准输入输出进行 JSON-RPC 通信
+ *
+ * <p>安全提示：本客户端会在宿主 JVM 中直接启动子进程执行外部命令，存在命令注入与
+ * 任意系统命令执行风险。请务必：
+ * <ul>
+ *   <li>仅允许受信任的用户修改 {@code mcp_server.transport_config}</li>
+ *   <li>命令名通过 {@link #ALLOWED_COMMANDS} 白名单校验</li>
+ *   <li>环境变量通过 {@link #DANGEROUS_ENV_VARS} 黑名单过滤</li>
+ *   <li>强烈建议配合 Docker 容器隔离运行 MCP Server，进一步限制文件系统 /
+ *       网络 / 进程权限，避免子进程逃逸影响宿主机</li>
+ * </ul>
  */
 @Slf4j
 public class McpStdioClient implements AutoCloseable {
@@ -27,11 +37,25 @@ public class McpStdioClient implements AutoCloseable {
     private final ExecutorService readExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
 
-    private Process process;
-    private BufferedWriter processWriter;
-    private BufferedReader processReader;
+    private volatile Process process;
+    private volatile BufferedWriter processWriter;
+    private volatile BufferedReader processReader;
     private volatile boolean connected = false;
     private volatile boolean closed = false;
+
+    /**
+     * 允许启动的命令白名单（基于命令名匹配，不含路径）。修改此列表需经过安全评审。
+     */
+    private static final Set<String> ALLOWED_COMMANDS = Set.of(
+            "npx", "node", "python", "python3", "uvx", "pipx");
+
+    /**
+     * 危险环境变量黑名单。这些变量可被用于劫持子进程行为（如加载恶意动态库、
+     * 修改可执行文件搜索路径、注入 JVM 选项），在合并 env 时将被过滤。
+     */
+    private static final Set<String> DANGEROUS_ENV_VARS = Set.of(
+            "LD_PRELOAD", "LD_LIBRARY_PATH", "PATH", "PYTHONPATH",
+            "PYTHONHOME", "NODE_PATH", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS");
 
     // 工具缓存
     private final List<Map<String, Object>> tools = new CopyOnWriteArrayList<>();
@@ -56,6 +80,13 @@ public class McpStdioClient implements AutoCloseable {
             throw new IllegalArgumentException("Stdio 配置缺少 command 字段");
         }
 
+        // 命令白名单校验：防止任意可执行文件被启动（如 rm / sh / curl）
+        String commandBase = commandBasename(command);
+        if (!ALLOWED_COMMANDS.contains(commandBase)) {
+            throw new SecurityException(
+                    "禁止启动非白名单命令: " + command + "，允许的命令: " + ALLOWED_COMMANDS);
+        }
+
         // 构建进程启动命令
         List<String> cmdList = new ArrayList<>();
         cmdList.add(command);
@@ -68,13 +99,20 @@ public class McpStdioClient implements AutoCloseable {
         // 启动子进程
         ProcessBuilder pb = new ProcessBuilder(cmdList);
         pb.redirectErrorStream(true); // 合并 stderr 到 stdout
+        // 限定工作目录到临时目录，避免子进程在业务目录读写敏感文件
+        pb.directory(new File(System.getProperty("java.io.tmpdir")));
 
-        // 环境变量
+        // 环境变量（过滤危险变量）
         if (config.has("env") && config.get("env").isObject()) {
             JsonNode envNode = config.get("env");
             Map<String, String> env = pb.environment();
             envNode.fields().forEachRemaining(entry -> {
-                env.put(entry.getKey(), entry.getValue().asText());
+                String key = entry.getKey();
+                if (DANGEROUS_ENV_VARS.contains(key)) {
+                    log.warn("过滤危险环境变量: {} (server={})", key, mcpServer.getServerName());
+                    return;
+                }
+                env.put(key, entry.getValue().asText());
             });
         }
 
@@ -105,6 +143,27 @@ public class McpStdioClient implements AutoCloseable {
 
     private JsonNode parseConfig() throws Exception {
         return objectMapper.readTree(mcpServer.getTransportConfig());
+    }
+
+    /**
+     * 提取命令的基础名称（去除路径前缀），用于白名单匹配。
+     * 例如 "/usr/local/bin/npx" -> "npx"，"npx.cmd" -> "npx"，"python3.exe" -> "python3"
+     */
+    private static String commandBasename(String command) {
+        if (command == null || command.isEmpty()) {
+            return "";
+        }
+        String name = command;
+        int slash = Math.max(command.lastIndexOf('/'), command.lastIndexOf('\\'));
+        if (slash >= 0 && slash < command.length() - 1) {
+            name = command.substring(slash + 1);
+        }
+        // 去除 Windows 可执行文件后缀（.exe / .cmd / .bat）
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            name = name.substring(0, dot);
+        }
+        return name;
     }
 
     private void readLoop() {
@@ -259,11 +318,35 @@ public class McpStdioClient implements AutoCloseable {
                 if (!closed && process != null && !process.isAlive()) {
                     log.warn("MCP Stdio 进程已退出: {}", mcpServer.getServerName());
                     connected = false;
+                    // 触发清理：关闭 reader/writer，使 readLoop 退出并阻止后续写入
+                    cleanupStreams();
                 }
             } catch (Exception e) {
                 log.warn("进程监控异常: {}", mcpServer.getServerName(), e);
             }
         }, 5, 5, TimeUnit.SECONDS);
+    }
+
+    /**
+     * 关闭子进程读写流，用于进程异常退出后的清理。不会关闭整个客户端。
+     */
+    private void cleanupStreams() {
+        BufferedWriter w = processWriter;
+        if (w != null) {
+            try {
+                w.close();
+            } catch (IOException e) {
+                log.warn("清理时关闭进程写入流失败", e);
+            }
+        }
+        BufferedReader r = processReader;
+        if (r != null) {
+            try {
+                r.close();
+            } catch (IOException e) {
+                log.warn("清理时关闭进程读取流失败", e);
+            }
+        }
     }
 
     @Override
@@ -277,9 +360,12 @@ public class McpStdioClient implements AutoCloseable {
         }
         pendingRequests.clear();
 
-        readExecutor.shutdownNow();
-        heartbeatExecutor.shutdownNow();
+        // 1. 先强制销毁子进程，避免其继续向流中写入数据
+        if (process != null) {
+            process.destroyForcibly();
+        }
 
+        // 2. 关闭读写流
         if (processWriter != null) {
             try {
                 processWriter.close();
@@ -296,9 +382,9 @@ public class McpStdioClient implements AutoCloseable {
             }
         }
 
-        if (process != null) {
-            process.destroyForcibly();
-        }
+        // 3. 最后关闭线程池（读取线程可能阻塞在 readLine，需在流关闭后再 shutdownNow）
+        readExecutor.shutdownNow();
+        heartbeatExecutor.shutdownNow();
 
         log.info("MCP Stdio 客户端已关闭: {}", mcpServer.getServerName());
     }

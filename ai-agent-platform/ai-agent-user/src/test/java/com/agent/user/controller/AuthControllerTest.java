@@ -140,10 +140,13 @@ class AuthControllerTest {
         userVO.setUsername("testuser");
         userVO.setEmail("test@example.com");
 
-        when(userService.getUserProfile(1L)).thenReturn(userVO);
+        when(userService.getUserProfile(1L, 1L)).thenReturn(userVO);
+
+        // 新版 GatewayUserIdFilter 从 Authorization 头解析 JWT，不再信任 X-User-Id
+        String accessToken = JwtUtil.generateAccessToken(1L, "testuser");
 
         mockMvc.perform(get("/api/v1/user/profile")
-                        .header("X-User-Id", "1"))
+                        .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.username").value("testuser"));

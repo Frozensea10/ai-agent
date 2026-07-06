@@ -16,6 +16,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SessionService {
 
+    private static final int STATUS_ACTIVE = 1;
+
     private final ChatSessionMapper sessionMapper;
 
     public ChatSession createSession(Long userId, Long agentId, Long kbId, String title) {
@@ -26,7 +28,7 @@ public class SessionService {
         session.setKbId(kbId);
         session.setSessionTitle(title != null ? title : "新对话");
         session.setMessageCount(0);
-        session.setStatus(1);
+        session.setStatus(STATUS_ACTIVE);
         sessionMapper.insert(session);
         return session;
     }

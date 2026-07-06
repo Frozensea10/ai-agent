@@ -36,6 +36,16 @@
             <h3>{{ currentSession?.sessionTitle || '新对话' }}</h3>
             <span v-if="currentSession?.kbCode" class="kb-tag">KB: {{ currentSession.kbCode }}</span>
           </div>
+          <div class="model-select-wrap">
+            <el-select v-model="selectedModel" placeholder="选择模型" clearable size="small" style="width: 220px">
+              <el-option
+                v-for="opt in modelOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+          </div>
         </div>
 
         <div class="chat-messages" ref="messagesRef">
@@ -57,7 +67,7 @@
                 <el-icon v-if="msg.role === 'user'"><User /></el-icon>
                 <img v-else src="/assets/friendly-bot.jpg" alt="ai" />
               </div>
-              <div class="message-bubble" v-html="renderMarkdown(msg.content)"></div>
+              <div class="message-bubble">{{ msg.content }}</div>
             </div>
           </div>
         </div>
@@ -110,13 +120,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, computed, onMounted } from 'vue'
+import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { ChatDotRound, User, Promotion, Plus, ChatSquare, Menu, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listSessions, createSession, deleteSession, getMessages, streamChat } from '@/api/chat'
 import { getKnowledgeBases } from '@/api/knowledge'
+import { listModelProviders } from '@/api/settings'
+import { getAgent } from '@/api/agent'
+import { providerLabelMap } from '@/utils/provider'
 import type { ChatSession, ChatMessage } from '@/types/chat'
 import type { KnowledgeBase } from '@/types/knowledge'
+import type { AgentConfig } from '@/types/agent'
 
 const DEFAULT_AGENT_ID = 1
 
@@ -127,11 +141,41 @@ const sending = ref(false)
 const loading = ref(false)
 const messagesRef = ref<HTMLDivElement>()
 const sidebarOpen = ref(false)
-const abortFn = ref<(() => void) | null>(null)
 const knowledgeBases = ref<KnowledgeBase[]>([])
 const newChatDialogVisible = ref(false)
 const newChatTitle = ref('新对话')
 const newChatKbId = ref<number | undefined>(undefined)
+const selectedModel = ref<string>('')
+const providerConfigs = ref<{ providerName: string; apiKey?: string; modelName?: string; enabled?: number }[]>([])
+const defaultAgent = ref<AgentConfig | null>(null)
+
+const modelOptions = computed(() => {
+  const options = providerConfigs.value
+    .filter(item => item.enabled !== 0 && item.modelName)
+    .map(item => ({
+      label: `${providerLabelMap[item.providerName] || item.providerName} · ${item.modelName}`,
+      value: `${item.providerName}:${item.modelName}`
+    }))
+  if (defaultAgent.value?.modelProvider && defaultAgent.value?.modelName) {
+    const defaultValue = `${defaultAgent.value.modelProvider}:${defaultAgent.value.modelName}`
+    if (!options.some(opt => opt.value === defaultValue)) {
+      options.unshift({
+        label: `${providerLabelMap[defaultAgent.value.modelProvider] || defaultAgent.value.modelProvider} · ${defaultAgent.value.modelName}（Agent 默认）`,
+        value: defaultValue
+      })
+    }
+  }
+  return options
+})
+
+const parsedSelectedModel = computed(() => {
+  if (!selectedModel.value) return { modelProvider: undefined, modelName: undefined }
+  const [provider, ...modelParts] = selectedModel.value.split(':')
+  return {
+    modelProvider: provider,
+    modelName: modelParts.join(':')
+  }
+})
 
 const currentSession = computed(() => {
   return chatSessions.value.find((s) => s.sessionId === currentSessionId.value)
@@ -147,9 +191,7 @@ const formatTime = (time?: string) => {
   return isToday ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString()
 }
 
-const renderMarkdown = (content: string) => {
-  return content.replace(/\n/g, '<br>')
-}
+const currentAbortController = ref<(() => void) | null>(null)
 
 const scrollToBottom = () => {
   if (messagesRef.value) {
@@ -187,9 +229,29 @@ const loadMessages = async (sessionId: string) => {
 const loadKnowledgeBases = async () => {
   try {
     const res = await getKnowledgeBases()
-    knowledgeBases.value = res.data || []
+    knowledgeBases.value = res || []
   } catch (e) {
     ElMessage.error('加载知识库列表失败')
+  }
+}
+
+const loadModelProviders = async () => {
+  try {
+    providerConfigs.value = await listModelProviders()
+  } catch (e) {
+    ElMessage.error('加载模型配置失败')
+  }
+}
+
+const loadDefaultAgent = async () => {
+  try {
+    const agent = await getAgent(DEFAULT_AGENT_ID)
+    defaultAgent.value = agent
+    if (agent.modelProvider && agent.modelName) {
+      selectedModel.value = `${agent.modelProvider}:${agent.modelName}`
+    }
+  } catch (e) {
+    ElMessage.error('加载默认 Agent 失败')
   }
 }
 
@@ -270,7 +332,9 @@ const sendMessage = async () => {
   }
   messages.value.push(aiMsg)
 
-  abortFn.value = streamChat(
+  let fullContent = ''
+
+  currentAbortController.value = streamChat(
     currentSessionId.value,
     content,
     DEFAULT_AGENT_ID,
@@ -278,28 +342,39 @@ const sendMessage = async () => {
       aiMsg.messageId = messageId
     },
     (chunk) => {
-      aiMsg.content += chunk
-      nextTick(scrollToBottom)
+      fullContent += chunk
     },
     () => {
+      aiMsg.content = fullContent
       sending.value = false
-      abortFn.value = null
+      currentAbortController.value = null
       nextTick(scrollToBottom)
     },
     (error) => {
+      aiMsg.content = fullContent ? fullContent + `\n\n[错误: ${error}]` : `[错误: ${error}]`
       sending.value = false
-      abortFn.value = null
-      aiMsg.content += `\n[错误: ${error}]`
+      currentAbortController.value = null
       ElMessage.error(error)
       nextTick(scrollToBottom)
     },
-    currentSession.value?.kbCode
+    currentSession.value?.kbCode,
+    parsedSelectedModel.value.modelProvider,
+    parsedSelectedModel.value.modelName
   )
 }
 
 onMounted(() => {
   loadSessions()
   loadKnowledgeBases()
+  loadModelProviders()
+  loadDefaultAgent()
+})
+
+onUnmounted(() => {
+  if (currentAbortController.value) {
+    currentAbortController.value()
+    currentAbortController.value = null
+  }
 })
 </script>
 
@@ -423,6 +498,10 @@ onMounted(() => {
   background: var(--card-bg);
 }
 
+.model-select-wrap {
+  margin-left: auto;
+}
+
 .chat-main-header h3 {
   margin: 0;
   font-size: 18px;
@@ -525,6 +604,7 @@ onMounted(() => {
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .user-message .message-bubble {

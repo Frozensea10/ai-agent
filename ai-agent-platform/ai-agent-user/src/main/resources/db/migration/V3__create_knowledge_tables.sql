@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
     kb_code VARCHAR(50) NOT NULL UNIQUE,
     description TEXT,
     embedding_model VARCHAR(100),
+    embedding_provider VARCHAR(50) DEFAULT 'openai',
     document_count INT DEFAULT 0,
     status TINYINT DEFAULT 1,
     created_by BIGINT,

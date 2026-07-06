@@ -200,7 +200,7 @@ const handleLogin = async () => {
     await userStore.loginAction(loginForm)
     ElMessage.success('登录成功')
     router.push('/')
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
   } finally {
     loading.value = false
@@ -217,7 +217,7 @@ const handleRegister = async () => {
     await userStore.registerAction(registerForm)
     ElMessage.success('注册成功，请登录')
     activeTab.value = 'login'
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error)
   } finally {
     loading.value = false

@@ -1,6 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    public?: boolean
+    title?: string
+  }
+}
+
 const routes = [
   {
     path: '/login',
@@ -57,6 +64,12 @@ const routes = [
         meta: { title: '设置' }
       }
     ]
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/NotFoundView.vue'),
+    meta: { public: true, title: '页面不存在' }
   }
 ]
 
@@ -65,14 +78,22 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore()
-  
+
   if (!userStore.isLoggedIn && !to.meta.public) {
     next('/login')
   } else if (userStore.isLoggedIn && to.path === '/login') {
     next('/')
   } else {
+    // 已登录但 userInfo 为空时，尝试补充加载用户信息
+    if (userStore.isLoggedIn && !userStore.userInfo && !to.meta.public) {
+      try {
+        await userStore.ensureUserInfo()
+      } catch {
+        // 加载失败时不阻塞导航，后续请求 401 会触发登录失效流程
+      }
+    }
     next()
   }
 })

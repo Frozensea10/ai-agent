@@ -20,6 +20,8 @@ public class KnowledgeBase {
 
     private String embeddingModel;
 
+    private String embeddingProvider;
+
     private Integer documentCount;
 
     private Integer status;

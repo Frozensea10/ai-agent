@@ -60,7 +60,7 @@ public class McpHttpClient implements AutoCloseable {
         JsonNode config = parseConfig();
         String baseUrl = config.has("baseUrl") ? config.get("baseUrl").asText() : "http://localhost:3000";
         sseEndpoint = baseUrl + "/sse";
-        messageEndpoint = baseUrl + "/message";
+        // messageEndpoint 由 SSE endpoint 事件动态下发，不再使用默认值以便 waitForEndpoint 正确等待
 
         // 建立 SSE 连接
         connectSse();
@@ -89,48 +89,55 @@ public class McpHttpClient implements AutoCloseable {
     private void connectSse() throws Exception {
         URL url = new URL(sseEndpoint);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
-        connection.setRequestProperty("Accept", "text/event-stream");
-        connection.setRequestProperty("Cache-Control", "no-cache");
-        connection.setConnectTimeout(10000);
-        connection.setReadTimeout(0); // SSE 长连接
+        try {
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Accept", "text/event-stream");
+            connection.setRequestProperty("Cache-Control", "no-cache");
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(0); // SSE 长连接
 
-        int responseCode = connection.getResponseCode();
-        if (responseCode != 200) {
-            throw new IOException("SSE 连接失败，HTTP状态码: " + responseCode);
-        }
-
-        sseFuture = executorService.submit(() -> {
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                String currentEvent = "";
-                StringBuilder dataBuffer = new StringBuilder();
-
-                while (!closed && (line = reader.readLine()) != null) {
-                    if (line.startsWith("event: ")) {
-                        currentEvent = line.substring(7);
-                    } else if (line.startsWith("data: ")) {
-                        dataBuffer.append(line.substring(6));
-                    } else if (line.isEmpty() && dataBuffer.length() > 0) {
-                        String data = dataBuffer.toString();
-                        dataBuffer.setLength(0);
-                        handleSseEvent(currentEvent, data);
-                        currentEvent = "";
-                    }
-                }
-            } catch (IOException e) {
-                if (!closed) {
-                    log.error("SSE 连接异常: {}", mcpServer.getServerName(), e);
-                    handleDisconnect();
-                }
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                throw new IOException("SSE 连接失败，HTTP状态码: " + responseCode);
             }
-        });
 
-        // 等待 endpoint 事件
-        boolean received = waitForEndpoint(5000);
-        if (!received) {
-            throw new IOException("未收到 SSE endpoint 事件");
+            sseFuture = executorService.submit(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    String currentEvent = "";
+                    StringBuilder dataBuffer = new StringBuilder();
+
+                    while (!closed && (line = reader.readLine()) != null) {
+                        if (line.startsWith("event: ")) {
+                            currentEvent = line.substring(7);
+                        } else if (line.startsWith("data: ")) {
+                            dataBuffer.append(line.substring(6));
+                        } else if (line.isEmpty() && dataBuffer.length() > 0) {
+                            String data = dataBuffer.toString();
+                            dataBuffer.setLength(0);
+                            handleSseEvent(currentEvent, data);
+                            currentEvent = "";
+                        }
+                    }
+                } catch (IOException e) {
+                    if (!closed) {
+                        log.error("SSE 连接异常: {}", mcpServer.getServerName(), e);
+                        handleDisconnect();
+                    }
+                } finally {
+                    connection.disconnect();
+                }
+            });
+
+            // 等待 endpoint 事件
+            boolean received = waitForEndpoint(5000);
+            if (!received) {
+                throw new IOException("未收到 SSE endpoint 事件");
+            }
+        } catch (Exception e) {
+            connection.disconnect();
+            throw e;
         }
     }
 
@@ -181,7 +188,7 @@ public class McpHttpClient implements AutoCloseable {
 
     private boolean waitForEndpoint(long timeoutMs) throws InterruptedException {
         long start = System.currentTimeMillis();
-        while (messageEndpoint == null || messageEndpoint.endsWith("/message")) {
+        while (messageEndpoint == null) {
             if (System.currentTimeMillis() - start > timeoutMs) {
                 return false;
             }
@@ -281,19 +288,23 @@ public class McpHttpClient implements AutoCloseable {
     private void sendHttpPost(JsonNode message) throws Exception {
         URL url = new URL(messageEndpoint);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json");
-        conn.setDoOutput(true);
-        conn.setConnectTimeout(10000);
-        conn.setReadTimeout(30000);
+        try {
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(30000);
 
-        try (OutputStream os = conn.getOutputStream()) {
-            os.write(message.toString().getBytes(StandardCharsets.UTF_8));
-        }
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(message.toString().getBytes(StandardCharsets.UTF_8));
+            }
 
-        int responseCode = conn.getResponseCode();
-        if (responseCode != 200 && responseCode != 202) {
-            throw new IOException("HTTP POST 失败，状态码: " + responseCode);
+            int responseCode = conn.getResponseCode();
+            if (responseCode != 200 && responseCode != 202) {
+                throw new IOException("HTTP POST 失败，状态码: " + responseCode);
+            }
+        } finally {
+            conn.disconnect();
         }
     }
 
@@ -349,8 +360,8 @@ public class McpHttpClient implements AutoCloseable {
         heartbeatExecutor.scheduleAtFixedRate(() -> {
             try {
                 if (!closed && connected) {
-                    // 发送 ping 或保持连接
-                    sendNotification("ping", objectMapper.createObjectNode());
+                    // 发送带 id 的 JSON-RPC ping 请求，等待响应以确认连接存活
+                    sendRequest("ping", objectMapper.createObjectNode());
                 }
             } catch (Exception e) {
                 log.warn("MCP 心跳失败: {}", mcpServer.getServerName(), e);

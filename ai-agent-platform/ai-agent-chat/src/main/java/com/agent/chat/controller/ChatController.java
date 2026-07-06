@@ -18,7 +18,6 @@ import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
 import com.agent.common.result.Result;
 import com.agent.core.llm.service.LLMService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,8 +50,6 @@ public class ChatController {
     private final AgentFeignClient agentFeignClient;
     private final KnowledgeFeignClient knowledgeFeignClient;
     private final ChatMemoryProvider chatMemoryProvider;
-
-    private final ObjectMapper objectMapper;
 
     @Operation(summary = "查询会话列表", description = "查询当前用户的所有聊天会话")
     @GetMapping("/sessions")
@@ -104,9 +101,14 @@ public class ChatController {
 
         messageService.saveUserMessage(sessionId, request.getContent());
 
+        String modelProvider = request.getModelProvider() != null && !request.getModelProvider().isBlank()
+                ? request.getModelProvider() : agent.getModelProvider();
+        String modelName = request.getModelName() != null && !request.getModelName().isBlank()
+                ? request.getModelName() : agent.getModelName();
+
         ChatModel chatModel = llmService.createChatModel(
-                agent.getModelProvider(),
-                agent.getModelName(),
+                modelProvider,
+                modelName,
                 agent.getTemperature(),
                 agent.getMaxTokens()
         );
@@ -122,7 +124,7 @@ public class ChatController {
         );
 
         ChatMessage aiMessage = messageService.saveAssistantMessage(
-                sessionId, response, agent.getModelName(), null
+                sessionId, response, modelName, null
         );
         sessionService.updateMessageCount(sessionId);
 
@@ -131,21 +133,27 @@ public class ChatController {
 
     @Operation(summary = "流式对话", description = "向指定会话发送消息并以 SSE 流式返回 AI 回复")
     @GetMapping(value = "/sessions/{sessionId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> streamChat(
+    public Flux<SSEMessage> streamChat(
             @PathVariable @NotBlank String sessionId,
             @RequestParam @NotBlank String content,
             @RequestParam @NotNull Long agentId,
             @RequestParam(required = false) String kbCode,
+            @RequestParam(required = false) String modelProvider,
+            @RequestParam(required = false) String modelName,
             @RequestHeader(HEADER_USER_ID) Long userId) {
+        log.info("流式对话请求 - sessionId: {}, agentId: {}, content: '{}', kbCode: {}, modelProvider: {}, modelName: {}", sessionId, agentId, content, kbCode, modelProvider, modelName);
         try {
             sessionService.getSession(sessionId, userId);
 
             AgentConfigDTO agent = resolveAgent(agentId, userId);
             String ragContext = retrieveRagContext(kbCode, content, userId);
 
+            String provider = modelProvider != null && !modelProvider.isBlank() ? modelProvider : agent.getModelProvider();
+            String name = modelName != null && !modelName.isBlank() ? modelName : agent.getModelName();
+
             StreamingChatModel streamingModel = llmService.createStreamingModel(
-                    agent.getModelProvider(),
-                    agent.getModelName(),
+                    provider,
+                    name,
                     agent.getTemperature(),
                     agent.getMaxTokens()
             );
@@ -160,27 +168,19 @@ public class ChatController {
                     agent.getMemoryType(),
                     agent.getMemoryMaxMessages(),
                     streamingModel,
-                    agent.getModelName()
+                    name
             );
         } catch (BusinessException e) {
-            return Flux.just(toJson(SSEMessage.error(e.getMessage())));
+            return Flux.just(SSEMessage.error(e.getMessage()));
         } catch (Exception e) {
-            return Flux.just(toJson(SSEMessage.error("流式对话失败: " + e.getMessage())));
-        }
-    }
-
-    private String toJson(SSEMessage message) {
-        try {
-            return "data: " + objectMapper.writeValueAsString(message) + "\n\n";
-        } catch (Exception ex) {
-            log.error("序列化 SSEMessage 失败", ex);
-            return "data: {}\n\n";
+            log.error("流式对话异常", e);
+            return Flux.just(SSEMessage.error("流式对话失败: " + e.getMessage()));
         }
     }
 
     private AgentConfigDTO resolveAgent(Long agentId, Long userId) {
         Result<AgentConfigDTO> agentResult = agentFeignClient.getAgent(agentId, userId);
-        if (!agentResult.isSuccess() || agentResult.getData() == null) {
+        if (agentResult == null || !agentResult.isSuccess() || agentResult.getData() == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "Agent 不存在或无法访问");
         }
         return agentResult.getData();
@@ -188,17 +188,22 @@ public class ChatController {
 
     private String retrieveRagContext(String kbCode, String query, Long userId) {
         if (kbCode == null || kbCode.isBlank()) {
+            log.warn("RAG 未启用: kbCode 为空");
             return null;
         }
         try {
+            log.info("RAG 检索开始: kbCode={}, query={}", kbCode, query);
             KnowledgeFeignClient.RAGQueryRequest request = new KnowledgeFeignClient.RAGQueryRequest();
             request.setQuery(query);
-            request.setTopK(5);
+            request.setTopK(10);
             Result<KnowledgeFeignClient.RAGResponse> result = knowledgeFeignClient.ragQuery(kbCode, request, userId);
+            log.info("RAG 检索响应: kbCode={}, success={}", kbCode, result != null && result.isSuccess());
             if (result != null && result.isSuccess() && result.getData() != null) {
-                return result.getData().getContext();
+                String context = result.getData().getContext();
+                log.info("RAG 检索成功: kbCode={}, contextLength={}", kbCode, context != null ? context.length() : 0);
+                return context;
             }
-            log.warn("RAG 检索未返回有效结果: kbCode={}", kbCode);
+            log.warn("RAG 检索未返回有效结果: kbCode={}, result={}", kbCode, result);
         } catch (Exception e) {
             log.error("RAG 检索失败: kbCode={}, query={}", kbCode, query, e);
         }

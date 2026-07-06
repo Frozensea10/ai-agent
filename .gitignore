@@ -78,8 +78,15 @@ screenshots/
 
 # Browser automation artifacts
 .agent-browser/
+.agent-browser-sock/
 .chrome-debug/
 browser-data/
 
 # Upload / cache / embedded runtime artifacts
 .uploads/
+
+# Temporary debug artifacts
+rag_query*.json
+tmp_*.json
+capture_console_errors.py
+commit_msg.txt

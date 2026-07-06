@@ -175,6 +175,7 @@ class DatabaseQueryExecutorTest {
         ToolExecuteResult result = executor.execute(createRequest("SELECT * FROM users"));
 
         assertFalse(result.isSuccess());
-        assertEquals("查询失败: syntax error", result.getErrorMessage());
+        // 异常消息已脱敏，不再回传 e.getMessage() 给客户端
+        assertEquals("查询执行失败，请联系管理员", result.getErrorMessage());
     }
 }

@@ -4,6 +4,7 @@ import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
 import com.agent.knowledge.chunk.DocumentChunker;
 import com.agent.knowledge.embedding.EmbeddingService;
+import com.agent.knowledge.service.DocumentAsyncProcessor;
 import com.agent.knowledge.entity.KnowledgeBase;
 import com.agent.knowledge.entity.KnowledgeChunk;
 import com.agent.knowledge.entity.KnowledgeDocument;
@@ -64,6 +65,9 @@ class KnowledgeBaseServiceTest {
     @Mock
     private QdrantService qdrantService;
 
+    @Mock
+    private DocumentAsyncProcessor documentAsyncProcessor;
+
     @InjectMocks
     private KnowledgeBaseService knowledgeBaseService;
 
@@ -88,7 +92,7 @@ class KnowledgeBaseServiceTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(embeddingService.getVectorSize()).thenReturn(1536);
+        lenient().when(embeddingService.getVectorSize(any(), any())).thenReturn(1536);
     }
 
     @Test
@@ -99,7 +103,7 @@ class KnowledgeBaseServiceTest {
         doNothing().when(qdrantService).createCollection(anyString(), eq(1536));
 
         KnowledgeBaseVO result = knowledgeBaseService.createKnowledgeBase(
-                KB_NAME, KB_CODE, "Description", "text-embedding-3-small", USER_ID);
+                KB_NAME, KB_CODE, "Description", "text-embedding-3-small", "openai", USER_ID);
 
         assertNotNull(result);
         assertEquals(KB_NAME, result.getKbName());
@@ -115,7 +119,7 @@ class KnowledgeBaseServiceTest {
         when(kbMapper.selectByCode(KB_CODE)).thenReturn(new KnowledgeBase());
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> knowledgeBaseService.createKnowledgeBase(KB_NAME, KB_CODE, "Description", null, USER_ID));
+                () -> knowledgeBaseService.createKnowledgeBase(KB_NAME, KB_CODE, "Description", null, null, USER_ID));
 
         assertEquals(ErrorCode.PARAM_ERROR.getCode(), exception.getCode());
         verify(kbMapper, never()).insert(any(KnowledgeBase.class));
@@ -130,7 +134,7 @@ class KnowledgeBaseServiceTest {
         doThrow(new RuntimeException("Qdrant error")).when(qdrantService).createCollection(anyString(), any(Integer.class));
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> knowledgeBaseService.createKnowledgeBase(KB_NAME, KB_CODE, "Description", null, USER_ID));
+                () -> knowledgeBaseService.createKnowledgeBase(KB_NAME, KB_CODE, "Description", null, null, USER_ID));
 
         assertEquals(ErrorCode.VECTOR_SERVICE_ERROR.getCode(), exception.getCode());
         assertTrue(exception.getMessage().contains("向量数据库初始化失败"));
@@ -193,7 +197,7 @@ class KnowledgeBaseServiceTest {
         when(kbMapper.updateById(kb)).thenReturn(1);
 
         KnowledgeBaseVO result = knowledgeBaseService.updateKnowledgeBase(
-                KB_ID, "Updated Name", "Updated Description", "text-embedding-3-large", USER_ID);
+                KB_ID, "Updated Name", "Updated Description", "text-embedding-3-large", "openai", USER_ID);
 
         assertEquals("Updated Name", result.getKbName());
         assertEquals("Updated Description", result.getDescription());
@@ -209,7 +213,7 @@ class KnowledgeBaseServiceTest {
         when(kbMapper.updateById(kb)).thenReturn(1);
 
         KnowledgeBaseVO result = knowledgeBaseService.updateKnowledgeBase(
-                KB_ID, "Updated Name", null, null, USER_ID);
+                KB_ID, "Updated Name", null, null, null, USER_ID);
 
         assertEquals("Updated Name", result.getKbName());
         assertEquals("Description", result.getDescription());
@@ -222,7 +226,7 @@ class KnowledgeBaseServiceTest {
         when(kbMapper.selectById(KB_ID)).thenReturn(null);
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> knowledgeBaseService.updateKnowledgeBase(KB_ID, KB_NAME, null, null, USER_ID));
+                () -> knowledgeBaseService.updateKnowledgeBase(KB_ID, KB_NAME, null, null, null, USER_ID));
 
         assertEquals(ErrorCode.NOT_FOUND.getCode(), exception.getCode());
     }
@@ -234,7 +238,7 @@ class KnowledgeBaseServiceTest {
         when(kbMapper.selectById(KB_ID)).thenReturn(kb);
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> knowledgeBaseService.updateKnowledgeBase(KB_ID, KB_NAME, null, null, USER_ID));
+                () -> knowledgeBaseService.updateKnowledgeBase(KB_ID, KB_NAME, null, null, null, USER_ID));
 
         assertEquals(ErrorCode.FORBIDDEN.getCode(), exception.getCode());
         verify(kbMapper, never()).updateById(any(KnowledgeBase.class));

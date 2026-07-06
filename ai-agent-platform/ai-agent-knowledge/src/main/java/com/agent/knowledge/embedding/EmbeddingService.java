@@ -2,117 +2,119 @@ package com.agent.knowledge.embedding;
 
 import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+import com.agent.common.result.Result;
+import com.agent.knowledge.feign.EmbeddingFeignClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.agent.knowledge.embedding.EmbeddingConstants.*;
-
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class EmbeddingService {
 
-    @Value("${llm.embedding.provider:openai}")
-    private String provider;
+    /**
+     * Embedding 单次批量上限。DashScope text-embedding-v4 等模型单请求最多 10 条文本，
+     * OpenAI text-embedding-3-* 也建议小批量调用以避免超时或限流。
+     */
+    private static final int EMBED_BATCH_SIZE = 10;
 
-    @Value("${llm.embedding.model:text-embedding-3-small}")
-    private String modelName;
+    private final EmbeddingFeignClient embeddingFeignClient;
 
-    @Value("${llm.embedding.api-key:}")
-    private String apiKey;
-
-    @Value("${llm.embedding.timeout-seconds:60}")
-    private long timeoutSeconds;
-
-    @Value("${llm.embedding.batch-size:100}")
-    private int batchSize;
-
-    private EmbeddingModel embeddingModel;
-
-    @PostConstruct
-    public void init() {
-        if (apiKey == null || apiKey.isBlank()) {
-            log.warn("Embedding API key not configured, embedding service will not be available");
-            return;
+    public List<Float> embed(String text, String provider, String modelName) {
+        checkAvailable(provider);
+        try {
+            Result<List<Float>> result = embeddingFeignClient.embed(provider, modelName, text);
+            if (result.isSuccess() && result.getData() != null) {
+                return result.getData();
+            }
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR.getCode(),
+                    "Embedding 服务调用失败: " + result.getMessage());
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Embedding 调用失败", e);
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR.getCode(), "Embedding 服务不可用");
         }
-        embeddingModel = OpenAiEmbeddingModel.builder()
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .timeout(Duration.ofSeconds(timeoutSeconds))
-                .build();
-        log.info("Embedding model initialized: {} - {}", provider, modelName);
     }
 
-    public List<Float> embed(String text) {
-        checkAvailable();
-        return embeddingModel.embed(text).content().vectorAsList();
-    }
-
-    public List<List<Float>> embedBatch(List<String> texts) {
-        checkAvailable();
+    public List<List<Float>> embedBatch(List<String> texts, String provider, String modelName) {
+        checkAvailable(provider);
         if (texts == null || texts.isEmpty()) {
             return new ArrayList<>();
         }
 
-        List<List<Float>> allEmbeddings = new ArrayList<>(texts.size());
-
-        for (int i = 0; i < texts.size(); i += batchSize) {
-            List<String> batch = texts.subList(i, Math.min(i + batchSize, texts.size()));
+        // 分批调用：DashScope text-embedding-v4 等模型单次批量有上限（通常 10 条），
+        // 一次性发送上千条会导致提供商返回“系统繁忙”或 422 错误。
+        List<List<Float>> all = new ArrayList<>(texts.size());
+        for (int from = 0; from < texts.size(); from += EMBED_BATCH_SIZE) {
+            int to = Math.min(from + EMBED_BATCH_SIZE, texts.size());
+            List<String> batch = texts.subList(from, to);
             try {
-                List<TextSegment> segments = batch.stream()
-                        .map(TextSegment::from)
-                        .toList();
-                List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
-                for (Embedding embedding : embeddings) {
-                    allEmbeddings.add(embedding.vectorAsList());
+                Result<List<List<Float>>> result = embeddingFeignClient.embedBatch(provider, modelName, batch);
+                if (!result.isSuccess() || result.getData() == null) {
+                    throw new BusinessException(ErrorCode.AI_SERVICE_ERROR.getCode(),
+                            "批量 Embedding 服务调用失败 (batch " + (from / EMBED_BATCH_SIZE + 1) + "): " + result.getMessage());
                 }
-                log.info("Batch embedding progress: {}/{} chunks", Math.min(i + batchSize, texts.size()), texts.size());
+                all.addAll(result.getData());
+            } catch (BusinessException e) {
+                throw e;
             } catch (Exception e) {
-                log.error("Batch embedding failed for chunk {}-{}", i, Math.min(i + batchSize, texts.size()), e);
-                allEmbeddings.addAll(embedBatchFallback(batch));
+                log.error("批量 Embedding 调用失败 (batch from={}, size={})", from, batch.size(), e);
+                throw new BusinessException(ErrorCode.AI_SERVICE_ERROR.getCode(), "Embedding 服务不可用: " + e.getMessage());
             }
         }
-
-        return allEmbeddings;
+        return all;
     }
 
-    private List<List<Float>> embedBatchFallback(List<String> batch) {
-        List<List<Float>> fallbackEmbeddings = new ArrayList<>(batch.size());
-        for (String text : batch) {
-            try {
-                fallbackEmbeddings.add(embeddingModel.embed(text).content().vectorAsList());
-            } catch (Exception ex) {
-                log.error("Single embedding failed for text: {}", text.substring(0, Math.min(LOG_TEXT_MAX_LENGTH, text.length())), ex);
-                fallbackEmbeddings.add(new ArrayList<>());
+    private void checkAvailable(String provider) {
+        try {
+            Result<Boolean> result = embeddingFeignClient.isProviderAvailable(provider);
+            if (!result.isSuccess() || !Boolean.TRUE.equals(result.getData())) {
+                throw new BusinessException(ErrorCode.AI_SERVICE_ERROR.getCode(),
+                        "Embedding 提供商 [" + provider + "] 未配置或不可用");
             }
-        }
-        return fallbackEmbeddings;
-    }
-
-    private void checkAvailable() {
-        if (embeddingModel == null) {
-            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR.getCode(), "Embedding model not initialized");
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.AI_SERVICE_ERROR.getCode(), "Embedding 服务不可用");
         }
     }
 
-    public int getVectorSize() {
-        return switch (modelName) {
-            case MODEL_TEXT_EMBEDDING_3_LARGE -> EMBEDDING_SIZE_3_LARGE;
-            case MODEL_TEXT_EMBEDDING_3_SMALL -> EMBEDDING_SIZE_3_SMALL;
-            default -> EMBEDDING_SIZE_3_SMALL;
-        };
+    /**
+     * 返回指定提供商 + 模型对应的向量维度。
+     * 不同提供商/模型维度不同，Qdrant collection 必须按此维度创建，否则插入向量会失败。
+     */
+    public int getVectorSize(String provider, String modelName) {
+        if (provider == null) {
+            return 1536;
+        }
+        switch (provider.trim().toLowerCase()) {
+            case "qwen":
+                // text-embedding-v4 默认 1024 维
+                return 1024;
+            case "openai":
+                if (modelName != null && modelName.contains("3-large")) {
+                    return 3072;
+                }
+                return 1536;
+            default:
+                return 1536;
+        }
     }
 
-    public boolean isAvailable() {
-        return embeddingModel != null;
+    public boolean isAvailable(String provider) {
+        if (provider == null || provider.isBlank()) {
+            return false;
+        }
+        try {
+            Result<Boolean> result = embeddingFeignClient.isProviderAvailable(provider);
+            return result.isSuccess() && Boolean.TRUE.equals(result.getData());
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

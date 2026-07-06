@@ -59,7 +59,7 @@
             <button class="btn-pill btn-primary-pill" style="padding: 8px 16px; font-size: 13px; background: var(--teal); border-color: var(--teal)" @click="goChat(agent)">
               <el-icon><ChatDotRound /></el-icon> 对话
             </button>
-            <button class="btn-pill btn-primary-pill" style="padding: 8px 16px; font-size: 13px; background: #ff6b6b; border-color: #ff6b6b" @click="handleDeleteAgent(agent)">
+            <button v-if="!isSystemAgent(agent)" class="btn-pill btn-primary-pill" style="padding: 8px 16px; font-size: 13px; background: #ff6b6b; border-color: #ff6b6b" @click="handleDeleteAgent(agent)">
               <el-icon><Delete /></el-icon> 删除
             </button>
           </div>
@@ -85,7 +85,7 @@
           <el-input v-model="agentForm.agentName" placeholder="Agent 名称" />
         </el-form-item>
         <el-form-item label="编码" required>
-          <el-input v-model="agentForm.agentCode" placeholder="唯一编码，如 code-assistant" />
+          <el-input v-model="agentForm.agentCode" placeholder="Agent 唯一标识，如 code-assistant，用于区分不同 Agent" />
         </el-form-item>
         <el-form-item label="模型提供商" required>
           <el-select v-model="agentForm.modelProvider" placeholder="选择模型提供商" style="width: 100%">
@@ -96,7 +96,17 @@
           </el-select>
         </el-form-item>
         <el-form-item label="模型名称" required>
-          <el-input v-model="agentForm.modelName" placeholder="如 gpt-3.5-turbo / deepseek-chat" />
+          <el-select v-model="agentForm.modelName" placeholder="选择模型名称" style="width: 100%">
+            <el-option
+              v-for="model in currentModelOptions"
+              :key="model"
+              :label="model"
+              :value="model"
+            />
+          </el-select>
+          <div v-if="!providerConfigs[agentForm.modelProvider]?.apiKey" class="model-tip">
+            该提供商尚未配置 API Key，请到“设置 → 模型配置”中配置。
+          </div>
         </el-form-item>
         <el-form-item label="描述" required>
           <el-input v-model="agentForm.description" type="textarea" :rows="3" placeholder="描述这个 Agent 的用途" />
@@ -129,11 +139,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Edit, ChatDotRound, Star, Cpu, Timer, Delete } from '@element-plus/icons-vue'
 import { listAgents, createAgent, updateAgent, deleteAgent } from '@/api/agent'
+import { listModelProviders } from '@/api/settings'
+import { providerColorMap } from '@/utils/provider'
 import type { AgentConfig, AgentForm } from '@/types/agent'
 
 const router = useRouter()
@@ -145,13 +157,57 @@ const showAgentDialog = ref(false)
 const isEditing = ref(false)
 const editAgentId = ref<number | null>(null)
 const agents = ref<AgentConfig[]>([])
+const providerConfigs = ref<Record<string, { apiKey?: string; modelName?: string; enabled?: number }>>({})
 
-const providerColorMap: Record<string, string> = {
-  openai: '#E0F7FA',
-  deepseek: '#F8BBD0',
-  qwen: '#FFF9C4',
-  anthropic: '#E8F5E9'
+const recommendedModels: Record<string, string[]> = {
+  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  qwen: ['qwen-turbo', 'qwen-plus', 'qwen-max'],
+  anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307']
 }
+
+const agentForm = reactive<AgentForm>({
+  agentName: '',
+  agentCode: '',
+  description: '',
+  modelProvider: 'openai',
+  modelName: 'gpt-3.5-turbo',
+  systemPrompt: '',
+  temperature: 0.7,
+  maxTokens: 2048,
+  memoryType: 'window',
+  memoryMaxMessages: 10
+})
+
+const currentModelOptions = computed(() => {
+  const models = recommendedModels[agentForm.modelProvider] || []
+  const saved = providerConfigs.value[agentForm.modelProvider]?.modelName
+  if (saved && !models.includes(saved)) {
+    return [saved, ...models]
+  }
+  return models
+})
+
+const loadProviderConfigs = async () => {
+  try {
+    const list = await listModelProviders()
+    for (const item of list) {
+      providerConfigs.value[item.providerName] = item
+    }
+  } catch {
+    // 忽略错误，使用默认推荐模型
+  }
+}
+
+const defaultModelName = (provider: string) => {
+  return providerConfigs.value[provider]?.modelName || recommendedModels[provider]?.[0] || ''
+}
+
+watch(() => agentForm.modelProvider, (newProvider) => {
+  if (!isEditing.value || !agentForm.modelName) {
+    agentForm.modelName = defaultModelName(newProvider)
+  }
+})
 
 const getAgentColor = (provider?: string) => {
   return providerColorMap[provider || ''] || '#F3E5F5'
@@ -168,19 +224,6 @@ const filteredAgents = computed(() => {
     )
   }
   return result
-})
-
-const agentForm = reactive<AgentForm>({
-  agentName: '',
-  agentCode: '',
-  description: '',
-  modelProvider: 'openai',
-  modelName: 'gpt-3.5-turbo',
-  systemPrompt: '',
-  temperature: 0.7,
-  maxTokens: 2048,
-  memoryType: 'window',
-  memoryMaxMessages: 10
 })
 
 const resetForm = () => {
@@ -276,12 +319,18 @@ const handleDeleteAgent = async (agent: AgentConfig) => {
   }
 }
 
+// 系统内置 Agent（如 default-assistant）不允许删除，避免前端硬编码的 DEFAULT_AGENT_ID=1 失效
+const isSystemAgent = (agent: AgentConfig) => {
+  return agent.agentCode === 'default-assistant'
+}
+
 const goChat = (agent: AgentConfig) => {
   router.push({ path: '/chat', query: { agentId: agent.id } })
 }
 
 onMounted(() => {
   loadAgents()
+  loadProviderConfigs()
 })
 </script>
 
@@ -423,5 +472,11 @@ onMounted(() => {
   font-size: 64px;
   color: var(--teal);
   margin-bottom: 16px;
+}
+.model-tip {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--coral, #FF6B6B);
+  font-weight: 600;
 }
 </style>

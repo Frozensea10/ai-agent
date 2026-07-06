@@ -34,4 +34,6 @@ export interface SendMessageForm {
   kbCode?: string
   content: string
   sessionId?: string
+  modelProvider?: string
+  modelName?: string
 }

@@ -4,13 +4,11 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.anthropic.AnthropicStreamingChatModel;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
 import static com.agent.core.llm.adapter.LlmAdapterConstants.*;
 
-@Component
 public class AnthropicAdapter implements ModelAdapter {
 
     @Override

@@ -8,6 +8,7 @@ import com.agent.knowledge.vo.KnowledgeDocumentVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +34,8 @@ public class KnowledgeBaseController {
             @RequestHeader("X-User-Id") Long userId) {
         return Result.success(knowledgeBaseService.createKnowledgeBase(
                 request.getKbName(), request.getKbCode(),
-                request.getDescription(), request.getEmbeddingModel(), userId));
+                request.getDescription(), request.getEmbeddingModel(),
+                request.getEmbeddingProvider(), userId));
     }
 
     @Operation(summary = "查询知识库列表", description = "查询当前用户的所有知识库")
@@ -58,7 +60,8 @@ public class KnowledgeBaseController {
             @Valid @RequestBody UpdateKBRequest request,
             @RequestHeader("X-User-Id") Long userId) {
         return Result.success(knowledgeBaseService.updateKnowledgeBase(
-                id, request.getKbName(), request.getDescription(), request.getEmbeddingModel(), userId));
+                id, request.getKbName(), request.getDescription(),
+                request.getEmbeddingModel(), request.getEmbeddingProvider(), userId));
     }
 
     @Operation(summary = "删除知识库", description = "根据知识库 ID 删除知识库及其文档")
@@ -95,8 +98,10 @@ public class KnowledgeBaseController {
             @PathVariable String kbCode,
             @Valid @RequestBody RetrieveRequest request,
             @RequestHeader("X-User-Id") Long userId) {
-        knowledgeBaseService.getKnowledgeBaseByCode(kbCode, userId);
-        return Result.success(ragService.retrieve(kbCode, request.getQuery(), request.getTopK() != null ? request.getTopK() : 5));
+        KnowledgeBaseVO kb = knowledgeBaseService.getKnowledgeBaseByCode(kbCode, userId);
+        return Result.success(ragService.retrieve(kbCode, request.getQuery(),
+                request.getTopK() != null ? request.getTopK() : 10,
+                kb.getEmbeddingProvider(), kb.getEmbeddingModel()));
     }
 
     @Operation(summary = "RAG 查询", description = "在指定知识库中检索并构建增强提示词")
@@ -105,9 +110,10 @@ public class KnowledgeBaseController {
             @PathVariable String kbCode,
             @Valid @RequestBody RAGQueryRequest request,
             @RequestHeader("X-User-Id") Long userId) {
-        knowledgeBaseService.getKnowledgeBaseByCode(kbCode, userId);
+        KnowledgeBaseVO kb = knowledgeBaseService.getKnowledgeBaseByCode(kbCode, userId);
         List<RAGService.RetrievalResult> results = ragService.retrieve(kbCode, request.getQuery(),
-                request.getTopK() != null ? request.getTopK() : 5);
+                request.getTopK() != null ? request.getTopK() : 10,
+                kb.getEmbeddingProvider(), kb.getEmbeddingModel());
         String context = ragService.buildContext(results);
         String prompt = ragService.buildPrompt(request.getQuery(), context, request.getSystemPrompt());
 
@@ -123,6 +129,7 @@ public class KnowledgeBaseController {
         private String kbName;
         private String description;
         private String embeddingModel;
+        private String embeddingProvider;
     }
 
     @lombok.Data
@@ -131,19 +138,20 @@ public class KnowledgeBaseController {
         @NotBlank private String kbCode;
         private String description;
         private String embeddingModel;
+        private String embeddingProvider;
     }
 
     @lombok.Data
     public static class RetrieveRequest {
         @NotBlank private String query;
-        private Integer topK;
+        @Max(value = 20, message = "topK 不能超过 20") private Integer topK;
     }
 
     @lombok.Data
     public static class RAGQueryRequest {
         @NotBlank private String query;
         private String systemPrompt;
-        private Integer topK;
+        @Max(value = 20, message = "topK 不能超过 20") private Integer topK;
     }
 
     @lombok.Data

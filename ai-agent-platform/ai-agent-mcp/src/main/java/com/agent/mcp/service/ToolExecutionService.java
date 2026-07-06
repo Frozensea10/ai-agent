@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -24,9 +25,14 @@ public class ToolExecutionService {
     private final McpClientManager mcpClientManager;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * 敏感工具列表：其参数可能包含 SQL、代码、密码等敏感信息，需脱敏后落库
+     */
+    private static final Set<String> SENSITIVE_TOOL_CODES = Set.of("code_java", "code_python", "db_query");
+
     public ToolExecuteResult execute(ToolExecuteRequest request) {
         String toolCode = request.getToolCode();
-        log.info("执行工具: {}, 参数: {}", toolCode, request.getParameters());
+        log.info("执行工具: {}", toolCode);
 
         ToolExecutionLog logEntity = new ToolExecutionLog();
         logEntity.setToolCode(toolCode);
@@ -57,7 +63,7 @@ public class ToolExecutionService {
             return handleToolNotFound(toolCode, logEntity, startTime);
         }
 
-        logEntity.setRequestParams(request.getParameters().toString());
+        logEntity.setRequestParams(maskSensitiveParams(toolCode, request.getParameters()));
 
         ToolExecuteResult result = executor.execute(request);
 
@@ -86,7 +92,7 @@ public class ToolExecutionService {
         String toolName = mcpTool.getToolName();
         Map<String, Object> parameters = request.getParameters();
 
-        logEntity.setRequestParams(parameters != null ? parameters.toString() : "{}");
+        logEntity.setRequestParams(maskSensitiveParams(toolCode, parameters));
 
         try {
             JsonNode result = mcpClientManager.callTool(serverName, toolName, parameters);
@@ -159,5 +165,20 @@ public class ToolExecutionService {
         toolExecutionLogMapper.insert(logEntity);
 
         return result;
+    }
+
+    /**
+     * 对敏感工具的参数做脱敏处理，避免 SQL、代码、密码等敏感信息落库。
+     * 非敏感工具保留原始参数字符串用于问题排查。
+     */
+    private String maskSensitiveParams(String toolCode, Map<String, Object> parameters) {
+        if (parameters == null) {
+            return "{}";
+        }
+        String paramsStr = parameters.toString();
+        if (SENSITIVE_TOOL_CODES.contains(toolCode)) {
+            return "[REDACTED, paramCount=" + parameters.size() + ", length=" + paramsStr.length() + "]";
+        }
+        return paramsStr;
     }
 }

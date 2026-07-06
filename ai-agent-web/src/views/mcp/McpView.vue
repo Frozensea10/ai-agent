@@ -71,7 +71,7 @@
                   <button class="action-link" @click="handleToggleStatus(server)">
                     {{ server.status === 'active' ? '禁用' : '启用' }}
                   </button>
-                  <button class="action-link danger" @click="handleDeleteServer(server.id!)">删除</button>
+                  <button class="action-link danger" @click="handleDeleteServer(server)">删除</button>
                 </div>
               </div>
             </div>
@@ -201,7 +201,7 @@ const executing = ref(false)
 const isEditing = ref(false)
 const editingId = ref<number | null>(null)
 const currentTool = ref<ToolInfo | null>(null)
-const executeParams = ref<Record<string, any>>({})
+const executeParams = ref<Record<string, unknown>>({})
 const executeResult = ref<ToolExecuteResult | null>(null)
 
 const serverForm = ref<McpServer>({
@@ -218,12 +218,8 @@ const loadData = async () => {
       listTools(),
       listMcpServers(),
     ])
-    if (toolsRes.code === 200) {
-      tools.value = toolsRes.data || []
-    }
-    if (serversRes.code === 200) {
-      servers.value = serversRes.data || []
-    }
+    tools.value = toolsRes || []
+    servers.value = serversRes || []
     await loadConnectionStatus()
   } catch (error) {
     ElMessage.error('加载数据失败')
@@ -235,9 +231,7 @@ const loadData = async () => {
 const loadConnectionStatus = async () => {
   try {
       const res = await getServerConnectionStatus()
-      if (res.code === 200) {
-        connectionStatus.value = res.data || {}
-      }
+      connectionStatus.value = res || {}
     } catch (error) {
       console.warn('获取连接状态失败', error)
     }
@@ -280,20 +274,15 @@ const handleSaveServer = async () => {
 
   submitting.value = true
   try {
-    let res
     if (isEditing.value && editingId.value) {
-      res = await updateMcpServer(editingId.value, serverForm.value)
+      await updateMcpServer(editingId.value, serverForm.value)
     } else {
-      res = await createMcpServer(serverForm.value)
+      await createMcpServer(serverForm.value)
     }
-    if (res.code === 200) {
-      ElMessage.success(isEditing.value ? '更新成功' : '添加成功')
-      showAddServer.value = false
-      resetForm()
-      loadData()
-    } else {
-      ElMessage.error(res.message || '操作失败')
-    }
+    ElMessage.success(isEditing.value ? '更新成功' : '添加成功')
+    showAddServer.value = false
+    resetForm()
+    loadData()
   } catch (error) {
     ElMessage.error('操作失败')
   } finally {
@@ -314,32 +303,26 @@ const handleEditServer = (server: McpServer) => {
 }
 
 const handleToggleStatus = async (server: McpServer) => {
+  if (!server.id) return
   const newStatus = server.status === 'active' ? 'inactive' : 'active'
   try {
-    const res = await updateMcpServerStatus(server.id!, newStatus)
-    if (res.code === 200) {
-      ElMessage.success(newStatus === 'active' ? '已启用' : '已禁用')
-      loadData()
-    } else {
-      ElMessage.error(res.message || '操作失败')
-    }
+    await updateMcpServerStatus(server.id, newStatus)
+    ElMessage.success(newStatus === 'active' ? '已启用' : '已禁用')
+    loadData()
   } catch (error) {
     ElMessage.error('操作失败')
   }
 }
 
-const handleDeleteServer = async (id: number) => {
+const handleDeleteServer = async (server: McpServer) => {
+  if (!server.id) return
   try {
     await ElMessageBox.confirm('确定删除该 MCP Server 吗？', '提示', {
       type: 'warning',
     })
-    const res = await deleteMcpServer(id)
-    if (res.code === 200) {
-      ElMessage.success('删除成功')
-      loadData()
-    } else {
-      ElMessage.error(res.message || '删除失败')
-    }
+    await deleteMcpServer(server.id)
+    ElMessage.success('删除成功')
+    loadData()
   } catch (error) {
     // 取消删除
   }
@@ -357,15 +340,11 @@ const handleExecute = async () => {
   executing.value = true
   try {
     const res = await executeTool(currentTool.value.toolCode, executeParams.value)
-    if (res.code === 200) {
-      executeResult.value = res.data
-      if (res.data?.success) {
-        ElMessage.success('执行成功')
-      } else {
-        ElMessage.warning('执行失败: ' + res.data?.errorMessage)
-      }
+    executeResult.value = res
+    if (res?.success) {
+      ElMessage.success('执行成功')
     } else {
-      ElMessage.error(res.message || '执行失败')
+      ElMessage.warning('执行失败: ' + res?.errorMessage)
     }
   } catch (error) {
     ElMessage.error('执行失败')
@@ -376,7 +355,7 @@ const handleExecute = async () => {
 
 const isCodeKey = (key: string | number) => key === 'code'
 
-const formatResult = (data: any) => {
+const formatResult = (data: unknown) => {
   if (typeof data === 'string') return data
   return JSON.stringify(data, null, 2)
 }

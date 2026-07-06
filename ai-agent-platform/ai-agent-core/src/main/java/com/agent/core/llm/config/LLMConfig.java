@@ -4,6 +4,7 @@ import com.agent.core.llm.adapter.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -17,6 +18,15 @@ public class LLMConfig {
         adapters.put("qwen", new QwenAdapter());
         adapters.put("anthropic", new AnthropicAdapter());
         adapters.put("deepseek", new DeepSeekAdapter());
-        return adapters;
+        return Collections.unmodifiableMap(adapters);
+    }
+
+    @Bean
+    public Map<String, EmbeddingAdapter> embeddingAdapterMap() {
+        Map<String, EmbeddingAdapter> adapters = new HashMap<>();
+        adapters.put("openai", new OpenAiEmbeddingAdapter());
+        adapters.put("deepseek", new DeepSeekEmbeddingAdapter());
+        adapters.put("qwen", new QwenEmbeddingAdapter());
+        return Collections.unmodifiableMap(adapters);
     }
 }
