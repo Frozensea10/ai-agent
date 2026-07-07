@@ -242,7 +242,7 @@ class ChatControllerTest {
         ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
         when(llmService.createChatModel(anyString(), anyString(), anyDouble(), anyInt())).thenReturn(chatModel);
 
-        when(chatLLMService.chat(anyString(), anyString(), anyString(), any(), anyString(), anyInt(), any(ChatModel.class)))
+        when(chatLLMService.chat(anyString(), anyString(), anyString(), any(), anyString(), anyInt(), any(ChatModel.class), anyLong()))
                 .thenReturn("AI 回复内容");
 
         when(messageService.saveUserMessage(SESSION_ID, "你好")).thenReturn(createMessage("user", "你好"));
@@ -283,7 +283,7 @@ class ChatControllerTest {
 
         when(messageService.saveUserMessage(SESSION_ID, "你好")).thenReturn(createMessage("user", "你好"));
         when(chatLLMService.streamChat(anyString(), anyString(), anyString(), any(), anyString(), anyInt(),
-                any(StreamingChatModel.class), anyString()))
+                any(StreamingChatModel.class), any(ChatModel.class), anyString(), anyLong()))
                 .thenReturn(Flux.just(SSEMessage.start("msg-1"), SSEMessage.content("你好")));
 
         MvcResult mvcResult = mockMvc.perform(get("/api/v1/sessions/{sessionId}/stream", SESSION_ID)

@@ -4,6 +4,7 @@ import com.agent.chat.dto.SSEMessage;
 import com.agent.chat.feign.McpFeignClient;
 import com.agent.chat.memory.ChatMemoryProvider;
 import com.agent.chat.service.MessageService;
+import com.agent.chat.service.SessionService;
 import com.agent.common.result.Result;
 import com.agent.mcp.dto.ToolExecuteResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,6 +44,9 @@ class ChatLLMServiceTest {
 
     @Mock
     private MessageService messageService;
+
+    @Mock
+    private SessionService sessionService;
 
     @Mock
     private McpFeignClient mcpFeignClient;
@@ -85,7 +89,7 @@ class ChatLLMServiceTest {
         doNothing().when(chatMemoryProvider).addUserMessage(SESSION_ID, MEMORY_TYPE, MAX_MESSAGES, USER_MESSAGE);
         doNothing().when(chatMemoryProvider).addAiMessage(SESSION_ID, MEMORY_TYPE, MAX_MESSAGES, "AI 回复");
 
-        String result = chatLLMService.chat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, chatModel);
+        String result = chatLLMService.chat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, chatModel, 1L);
 
         assertEquals("AI 回复", result);
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
@@ -105,7 +109,7 @@ class ChatLLMServiceTest {
         doNothing().when(chatMemoryProvider).addUserMessage(SESSION_ID, MEMORY_TYPE, MAX_MESSAGES, USER_MESSAGE);
         doNothing().when(chatMemoryProvider).addAiMessage(SESSION_ID, MEMORY_TYPE, MAX_MESSAGES, "基于参考信息回复");
 
-        String result = chatLLMService.chat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, ragContext, MEMORY_TYPE, MAX_MESSAGES, chatModel);
+        String result = chatLLMService.chat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, ragContext, MEMORY_TYPE, MAX_MESSAGES, chatModel, 1L);
 
         assertEquals("基于参考信息回复", result);
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
@@ -124,7 +128,7 @@ class ChatLLMServiceTest {
         doNothing().when(chatMemoryProvider).addUserMessage(SESSION_ID, MEMORY_TYPE, MAX_MESSAGES, USER_MESSAGE);
         doNothing().when(chatMemoryProvider).addAiMessage(SESSION_ID, MEMORY_TYPE, MAX_MESSAGES, "AI 回复");
 
-        chatLLMService.chat(SESSION_ID, USER_MESSAGE, null, null, MEMORY_TYPE, MAX_MESSAGES, chatModel);
+        chatLLMService.chat(SESSION_ID, USER_MESSAGE, null, null, MEMORY_TYPE, MAX_MESSAGES, chatModel, 1L);
 
         ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
         verify(chatModel).chat(captor.capture());
@@ -144,14 +148,14 @@ class ChatLLMServiceTest {
         ToolExecuteResult toolResult = new ToolExecuteResult();
         toolResult.setSuccess(true);
         toolResult.setData("OK");
-        when(mcpFeignClient.executeTool(eq("http_request"), anyMap()))
+        when(mcpFeignClient.executeTool(eq("http_request"), anyMap(), eq(1L)))
                 .thenReturn(Result.success(toolResult));
 
-        String result = chatLLMService.chat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, chatModel);
+        String result = chatLLMService.chat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, chatModel, 1L);
 
         assertTrue(result.contains("[工具执行结果]"));
         assertTrue(result.contains("OK"));
-        verify(mcpFeignClient).executeTool(eq("http_request"), anyMap());
+        verify(mcpFeignClient).executeTool(eq("http_request"), anyMap(), eq(1L));
     }
 
     @Test
@@ -174,7 +178,7 @@ class ChatLLMServiceTest {
             return null;
         }).when(streamingChatModel).chat(anyList(), any(StreamingChatResponseHandler.class));
 
-        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
+        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, chatModel, "gpt-4o-mini", 1L);
 
         StepVerifier.create(flux)
                 .expectNextMatches(sse -> "start".equals(sse.getType()))
@@ -206,7 +210,7 @@ class ChatLLMServiceTest {
             return null;
         }).when(streamingChatModel).chat(anyList(), any(StreamingChatResponseHandler.class));
 
-        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, ragContext, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
+        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, ragContext, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, chatModel, "gpt-4o-mini", 1L);
 
         StepVerifier.create(flux)
                 .expectNextCount(1)
@@ -226,7 +230,7 @@ class ChatLLMServiceTest {
             return null;
         }).when(streamingChatModel).chat(anyList(), any(StreamingChatResponseHandler.class));
 
-        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, "gpt-4o-mini");
+        Flux<SSEMessage> flux = chatLLMService.streamChat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, streamingChatModel, chatModel, "gpt-4o-mini", 1L);
 
         StepVerifier.create(flux)
                 .expectNextMatches(sse -> "start".equals(sse.getType()))
