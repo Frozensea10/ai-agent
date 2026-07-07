@@ -68,6 +68,9 @@ qdrant:
   grpc-port: 6334
   collection-prefix: ai-agent
 
+rag:
+  similarity-threshold: 0.3
+
 llm:
   embedding:
     provider: openai

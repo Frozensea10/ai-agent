@@ -26,10 +26,20 @@ public class RAGService {
     private float similarityThreshold;
 
     public List<RetrievalResult> retrieve(String kbCode, String query, int topK, String provider, String modelName) {
+        log.info("RAG 检索开始: kbCode={}, query={}, provider={}, modelName={}, topK={}, threshold={}",
+                kbCode, query, provider, modelName, topK, similarityThreshold);
         List<Float> queryVector = embeddingService.embed(query, provider, modelName);
         try {
             List<Points.ScoredPoint> results = qdrantService.search(kbCode, queryVector, topK);
-            return results.stream()
+            log.info("RAG 向量检索原始结果: kbCode={}, 返回points数={}", kbCode, results.size());
+            for (Points.ScoredPoint point : results) {
+                log.info("RAG 原始point: id={}, score={}, hasContent={}, hasDocId={}",
+                        point.getId().getUuid(),
+                        point.getScore(),
+                        point.getPayloadMap().containsKey("content"),
+                        point.getPayloadMap().containsKey("doc_id"));
+            }
+            List<RetrievalResult> filtered = results.stream()
                     .filter(point -> point.getScore() >= similarityThreshold)
                     .filter(point -> point.getPayloadMap().get("content") != null
                             && point.getPayloadMap().get("doc_id") != null)
@@ -40,6 +50,8 @@ public class RAGService {
                             point.getScore()
                     ))
                     .collect(Collectors.toList());
+            log.info("RAG 检索过滤后结果: kbCode={}, 召回数={}", kbCode, filtered.size());
+            return filtered;
         } catch (Exception e) {
             log.error("RAG 检索失败: kbCode={}, queryLength={}", kbCode, query == null ? 0 : query.length(), e);
             throw new BusinessException(ErrorCode.VECTOR_SERVICE_ERROR.getCode(), "检索失败: " + e.getMessage());

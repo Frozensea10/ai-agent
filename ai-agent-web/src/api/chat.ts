@@ -97,6 +97,10 @@ export function streamChat(
               onStart(parsed.messageId)
             } else if (parsed.type === 'content' && parsed.delta) {
               onChunk(parsed.delta)
+            } else if (parsed.type === 'tool_call') {
+              onChunk(`\n[调用工具 ${parsed.toolName}]\n`)
+            } else if (parsed.type === 'tool_result') {
+              onChunk(`[工具 ${parsed.toolName} 执行结果]\n${parsed.result}\n`)
             } else if (parsed.type === 'error') {
               if (!completed) {
                 completed = true

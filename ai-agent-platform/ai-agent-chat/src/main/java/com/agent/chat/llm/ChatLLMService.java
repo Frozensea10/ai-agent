@@ -416,11 +416,12 @@ public class ChatLLMService {
             }
             prompt.append("以下是与用户问题相关的参考信息:\n\n").append(ragContext).append("\n\n");
             prompt.append("回答要求：\n");
-            prompt.append("1. 如果用户问题与参考信息相关，请优先基于参考信息回答。\n");
-            prompt.append("2. 如果参考信息足以回答，请直接给出答案。\n");
-            prompt.append("3. 如果参考信息不足，但你配备了数据库查询等工具，请先调用工具获取数据，再基于工具结果回答，不要直接说无法回答。\n");
-            prompt.append("4. 不要回答\"没有收到文件\"或\"没有看到知识库\"，因为参考信息已经提供。\n");
-            prompt.append("5. 当需要调用工具时，直接输出工具调用格式，不要解释。");
+        prompt.append("1. 如果用户问题与参考信息相关，请优先基于参考信息回答。\n");
+        prompt.append("2. 如果参考信息足以回答，请直接给出答案。\n");
+        prompt.append("3. 如果参考信息不足，请基于已有信息尽力回答或说明需要补充资料，不要调用数据库查询、HTTP 请求等工具去获取知识库内容。\n");
+        prompt.append("4. 不要回答\"没有收到文件\"或\"没有看到知识库\"，因为参考信息已经提供。\n");
+        prompt.append("5. 当需要调用工具时，直接输出工具调用格式，不要解释。\n");
+        prompt.append("6. 本对话中已提供知识库上下文，无需调用工具查询 localhost:8082 或数据库表。");
         }
         return prompt.toString();
     }

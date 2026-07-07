@@ -405,6 +405,7 @@ const sendMessage = async () => {
     },
     (chunk) => {
       fullContent += chunk
+      aiMsg.content = fullContent
     },
     () => {
       aiMsg.content = fullContent
