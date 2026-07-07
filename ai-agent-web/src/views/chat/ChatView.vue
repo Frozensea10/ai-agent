@@ -37,17 +37,9 @@
             <span v-if="currentSession?.kbCode" class="kb-tag">KB: {{ currentSession.kbCode }}</span>
           </div>
           <div class="model-select-wrap">
-            <el-select v-model="selectedAgentId" placeholder="选择 Agent" size="small" style="width: 160px; margin-right: 10px" @change="handleAgentChange">
+            <el-select v-model="selectedAgentId" placeholder="选择 Agent" size="small" style="width: 140px" @change="handleAgentChange">
               <el-option
                 v-for="opt in agentOptions"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-            <el-select v-model="selectedModel" placeholder="选择模型" clearable size="small" style="width: 220px">
-              <el-option
-                v-for="opt in modelOptions"
                 :key="opt.value"
                 :label="opt.label"
                 :value="opt.value"
@@ -81,19 +73,50 @@
         </div>
 
         <div class="chat-input-area">
-          <div class="hand-input chat-input-wrap">
+          <div class="modern-input-card">
             <el-input
               v-model="inputMessage"
               type="textarea"
-              :rows="3"
-              placeholder="输入消息..."
+              :rows="4"
+              placeholder="帮你编写代码、调试 Bug、优化性能等开发工作，交付生产级代码产物。"
               @keyup.enter.ctrl="sendMessage"
               resize="none"
+              class="modern-textarea"
             />
-            <button class="btn-pill btn-primary-pill send-btn" :disabled="sending || !inputMessage.trim()" @click="sendMessage">
-              <el-icon v-if="!sending"><Promotion /></el-icon>
-              <span v-else>发送中</span>
-            </button>
+            <div class="input-toolbar">
+              <div class="toolbar-left">
+                <button class="toolbar-btn" title="上传文件">
+                  <el-icon><Paperclip /></el-icon>
+                </button>
+                <button class="toolbar-btn" title="上传图片">
+                  <el-icon><Picture /></el-icon>
+                </button>
+                <button class="toolbar-btn quick-btn" title="速通模式">
+                  <el-icon><MagicStick /></el-icon>
+                  <span>速通</span>
+                </button>
+              </div>
+              <div class="toolbar-right">
+                <el-select v-model="selectedModel" placeholder="选择模型" clearable size="small" class="model-select-inline">
+                  <el-option
+                    v-for="opt in modelOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+                <button class="toolbar-btn" title="语音输入">
+                  <el-icon><Microphone /></el-icon>
+                </button>
+                <button class="toolbar-btn" title="更多">
+                  <el-icon><More /></el-icon>
+                </button>
+                <button class="send-circle-btn" :disabled="sending || !inputMessage.trim()" @click="sendMessage">
+                  <el-icon v-if="!sending"><Top /></el-icon>
+                  <span v-else>发送中</span>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="input-actions">
             <span class="hint">Ctrl + Enter 发送</span>
@@ -138,7 +161,7 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatDotRound, User, Promotion, Plus, ChatSquare, Menu, Delete } from '@element-plus/icons-vue'
+import { ChatDotRound, User, Plus, ChatSquare, Menu, Delete, Paperclip, Picture, MagicStick, Microphone, More, Top } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listSessions, createSession, deleteSession, getMessages, streamChat } from '@/api/chat'
 import { getKnowledgeBases } from '@/api/knowledge'
@@ -699,24 +722,135 @@ onUnmounted(() => {
 }
 
 .chat-input-area {
-  padding: 16px 24px;
-  border-top: 3px solid var(--text-dark);
+  padding: 16px 24px 24px;
   background: var(--card-bg);
 }
 
-.chat-input-wrap {
+.modern-input-card {
+  background: #fff;
+  border: 2px solid var(--text-dark);
+  border-radius: 24px;
+  padding: 16px 16px 12px;
+  box-shadow: 6px 6px 0 var(--text-dark);
   display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.send-btn {
-  align-self: flex-end;
-  white-space: nowrap;
+.modern-textarea :deep(.el-textarea__inner) {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  resize: none !important;
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 4px 8px;
+  color: var(--text-dark);
+}
+
+.modern-textarea :deep(.el-textarea__inner::placeholder) {
+  color: #999;
+  font-size: 15px;
+}
+
+.modern-textarea :deep(.el-textarea__inner:focus) {
+  outline: none;
+}
+
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #666;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 18px;
+}
+
+.toolbar-btn:hover {
+  background: #f2f2f2;
+  color: var(--text-dark);
+}
+
+.quick-btn {
+  width: auto;
+  padding: 0 12px;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+}
+
+.quick-btn span {
+  font-size: 14px;
+}
+
+.model-select-inline {
+  width: 160px;
+}
+
+.model-select-inline :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  background: #f7f7f7;
+  box-shadow: none !important;
+  border: 1px solid transparent;
+}
+
+.model-select-inline :deep(.el-input__inner) {
+  font-size: 13px;
+  color: var(--text-dark);
+}
+
+.send-circle-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--coral);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 18px;
+  box-shadow: 2px 2px 0 var(--text-dark);
+}
+
+.send-circle-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 3px 3px 0 var(--text-dark);
+}
+
+.send-circle-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .input-actions {
-  margin-top: 8px;
-  text-align: right;
+  margin-top: 10px;
+  text-align: center;
 }
 
 .hint {
