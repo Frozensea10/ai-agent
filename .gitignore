@@ -75,12 +75,17 @@ login-error*.js
 login-page.png
 Workspaceai-agentlogin-error.png
 screenshots/
+docs/e2e_screenshots/
+test-screenshots/
 
 # Browser automation artifacts
 .agent-browser/
 .agent-browser-sock/
 .chrome-debug/
 browser-data/
+
+# TRAE / IDE skills
+.trae/
 
 # Upload / cache / embedded runtime artifacts
 .uploads/
@@ -90,3 +95,4 @@ rag_query*.json
 tmp_*.json
 capture_console_errors.py
 commit_msg.txt
+.env.backup
