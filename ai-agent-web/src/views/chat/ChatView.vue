@@ -85,16 +85,6 @@
             />
             <div class="input-toolbar">
               <div class="toolbar-left">
-                <button class="toolbar-btn" title="上传文件">
-                  <el-icon><Paperclip /></el-icon>
-                </button>
-                <button class="toolbar-btn" title="上传图片">
-                  <el-icon><Picture /></el-icon>
-                </button>
-                <button class="toolbar-btn quick-btn" title="速通模式">
-                  <el-icon><MagicStick /></el-icon>
-                  <span>速通</span>
-                </button>
               </div>
               <div class="toolbar-right">
                 <el-select v-model="selectedModel" placeholder="选择模型" clearable size="small" class="model-select-inline">
@@ -105,12 +95,6 @@
                     :value="opt.value"
                   />
                 </el-select>
-                <button class="toolbar-btn" title="语音输入">
-                  <el-icon><Microphone /></el-icon>
-                </button>
-                <button class="toolbar-btn" title="更多">
-                  <el-icon><More /></el-icon>
-                </button>
                 <button class="send-circle-btn" :disabled="sending || !inputMessage.trim()" @click="sendMessage">
                   <el-icon v-if="!sending"><Top /></el-icon>
                   <span v-else>发送中</span>
@@ -161,7 +145,7 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatDotRound, User, Plus, ChatSquare, Menu, Delete, Paperclip, Picture, MagicStick, Microphone, More, Top } from '@element-plus/icons-vue'
+import { ChatDotRound, User, Plus, ChatSquare, Menu, Delete, Top } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listSessions, createSession, deleteSession, getMessages, streamChat } from '@/api/chat'
 import { getKnowledgeBases } from '@/api/knowledge'

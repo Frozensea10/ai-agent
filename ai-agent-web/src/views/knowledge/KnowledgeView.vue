@@ -11,9 +11,10 @@
     </div>
 
     <div class="search-bar">
-      <div class="hand-input search-input-wrap">
-        <el-icon><Search /></el-icon>
-        <el-input v-model="searchKeyword" placeholder="搜索知识库..." clearable />
+      <div class="modern-search">
+        <el-icon class="search-icon"><Search /></el-icon>
+        <el-input v-model="searchKeyword" placeholder="搜索或跳转到..." clearable />
+        <span class="search-shortcut">/</span>
       </div>
     </div>
 
@@ -382,23 +383,69 @@ onMounted(() => {
   max-width: 480px;
 }
 
-.search-input-wrap {
+.modern-search {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 16px;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #1a1a2e;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
 }
 
-.search-input-wrap :deep(.el-input__wrapper) {
+.modern-search:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.modern-search:focus-within {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.search-icon {
+  font-size: 18px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.modern-search :deep(.el-input__wrapper) {
   background: transparent;
-  box-shadow: none;
-  border: none;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0;
+  flex: 1;
 }
 
-.search-input-wrap :deep(.el-input__inner) {
+.modern-search :deep(.el-input__inner) {
+  font-size: 15px;
+  color: #f3f4f6;
+  height: 28px;
+  line-height: 28px;
+}
+
+.modern-search :deep(.el-input__inner::placeholder) {
+  color: #6b7280;
+}
+
+.modern-search :deep(.el-input__clear) {
+  color: #6b7280;
+}
+
+.modern-search :deep(.el-input__clear:hover) {
+  color: #f3f4f6;
+}
+
+.search-shortcut {
+  font-size: 12px;
+  color: #6b7280;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px 8px;
   font-family: 'Nunito', sans-serif;
   font-weight: 600;
-  color: var(--text-dark);
+  flex-shrink: 0;
 }
 
 .kb-list {
