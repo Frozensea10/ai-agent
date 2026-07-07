@@ -388,25 +388,26 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  background: #1a1a2e;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background: #fffef8;
+  border-radius: 18px;
+  border: 2px solid var(--text-dark);
+  box-shadow: 4px 4px 0 var(--text-dark);
   transition: all 0.2s ease;
 }
 
 .modern-search:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 5px 5px 0 var(--text-dark);
 }
 
 .modern-search:focus-within {
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  box-shadow: 6px 6px 0 var(--coral);
+  border-color: var(--coral);
 }
 
 .search-icon {
   font-size: 18px;
-  color: #9ca3af;
+  color: var(--text-dark);
   flex-shrink: 0;
 }
 
@@ -420,32 +421,34 @@ onMounted(() => {
 
 .modern-search :deep(.el-input__inner) {
   font-size: 15px;
-  color: #f3f4f6;
+  color: var(--text-dark);
   height: 28px;
   line-height: 28px;
 }
 
 .modern-search :deep(.el-input__inner::placeholder) {
-  color: #6b7280;
+  color: #b0a89b;
 }
 
 .modern-search :deep(.el-input__clear) {
-  color: #6b7280;
+  color: #b0a89b;
 }
 
 .modern-search :deep(.el-input__clear:hover) {
-  color: #f3f4f6;
+  color: var(--coral);
 }
 
 .search-shortcut {
   font-size: 12px;
-  color: #6b7280;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
+  color: var(--text-dark);
+  background: var(--card-bg);
+  border: 2px solid var(--text-dark);
+  border-radius: 8px;
   padding: 2px 8px;
   font-family: 'Nunito', sans-serif;
-  font-weight: 600;
+  font-weight: 700;
   flex-shrink: 0;
+  box-shadow: 2px 2px 0 var(--text-dark);
 }
 
 .kb-list {

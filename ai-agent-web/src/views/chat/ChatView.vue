@@ -756,39 +756,6 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.toolbar-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: none;
-  background: transparent;
-  color: #666;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 18px;
-}
-
-.toolbar-btn:hover {
-  background: #f2f2f2;
-  color: var(--text-dark);
-}
-
-.quick-btn {
-  width: auto;
-  padding: 0 12px;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-}
-
-.quick-btn span {
-  font-size: 14px;
-}
-
 .model-select-inline {
   width: 160px;
 }

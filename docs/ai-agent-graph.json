@@ -1,0 +1,46 @@
+{
+  "direction": "TB",
+  "nodes": [
+    {"id": "title", "label": "AI Agent 智能助手系统架构", "style": "text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1", "width": 400, "height": 40},
+
+    {"id": "frontend-group", "label": "第一层：Vue 3 前端层", "style": "group;rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#0288d1;fontSize=14;fontStyle=1;verticalAlign=top;", "width": 1180, "height": 130},
+    {"id": "login", "label": "登录 Login\nAuthView", "group": "frontend-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4fc3f7;", "width": 140, "height": 60},
+    {"id": "chat", "label": "对话 Chat\nChatView · SSE", "group": "frontend-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4fc3f7;", "width": 140, "height": 60},
+    {"id": "agent", "label": "Agent 配置\nAgentView", "group": "frontend-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4fc3f7;", "width": 140, "height": 60},
+    {"id": "knowledge", "label": "知识库\nKnowledgeView", "group": "frontend-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4fc3f7;", "width": 140, "height": 60},
+    {"id": "mcp", "label": "MCP 工具\nMcpView", "group": "frontend-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4fc3f7;", "width": 140, "height": 60},
+    {"id": "file", "label": "文件 / 设置\nFileView / SettingsView", "group": "frontend-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4fc3f7;", "width": 160, "height": 60},
+
+    {"id": "gateway-group", "label": "第二层：Spring Cloud Gateway 网关层 (8080)", "style": "group;rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#43a047;fontSize=14;fontStyle=1;verticalAlign=top;", "width": 1180, "height": 100},
+    {"id": "gateway", "label": "统一认证 · 限流熔断\n路由转发 · 日志监控", "group": "gateway-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#66bb6a;", "width": 360, "height": 60},
+
+    {"id": "service-group", "label": "第三层：Spring Boot 3.x 业务服务层", "style": "group;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#fb8c00;fontSize=14;fontStyle=1;verticalAlign=top;", "width": 1180, "height": 160},
+    {"id": "user", "label": "用户服务\nuser-service\n8081 · JWT / RBAC", "group": "service-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ffb74d;", "width": 160, "height": 80},
+    {"id": "agent-core", "label": "Agent 核心\nagent-core-service\n8082 · 模型 / Prompt", "group": "service-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ffb74d;", "width": 180, "height": 80},
+    {"id": "chat-svc", "label": "对话服务\nchat-service\n8083 · SSE 流式", "group": "service-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ffb74d;", "width": 160, "height": 80},
+    {"id": "knowledge-svc", "label": "知识库服务\nknowledge-service\n8084 · RAG / 向量", "group": "service-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ffb74d;", "width": 180, "height": 80},
+    {"id": "mcp-svc", "label": "MCP 工具\nmcp-tool-service\n8086 · 工具执行", "group": "service-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ffb74d;", "width": 160, "height": 80},
+    {"id": "file-svc", "label": "文件服务\nfile-service\n8085 · MinIO", "group": "service-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ffb74d;", "width": 160, "height": 80},
+
+    {"id": "data-group", "label": "第四层：数据存储层（Docker Compose）", "style": "group;rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#8e24aa;fontSize=14;fontStyle=1;verticalAlign=top;", "width": 1180, "height": 110},
+    {"id": "mysql", "label": "MySQL 8.0\n关系型数据 · 3306", "group": "data-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ba68c8;", "width": 160, "height": 60},
+    {"id": "redis", "label": "Redis 7.x\n缓存 / 会话 · 6379", "group": "data-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ba68c8;", "width": 160, "height": 60},
+    {"id": "qdrant", "label": "Qdrant\n向量数据库 · 6333", "group": "data-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ba68c8;", "width": 160, "height": 60},
+    {"id": "minio", "label": "MinIO\n对象存储 · 9000", "group": "data-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ba68c8;", "width": 160, "height": 60},
+    {"id": "rabbitmq", "label": "RabbitMQ\n消息队列 · 5672", "group": "data-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ba68c8;", "width": 160, "height": 60},
+
+    {"id": "ai-group", "label": "第五层：AI 能力层（LangChain4j + 多模型）", "style": "group;rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#e53935;fontSize=14;fontStyle=1;verticalAlign=top;", "width": 900, "height": 110},
+    {"id": "llm", "label": "LLM 大模型\nOpenAI / DeepSeek / 千问", "group": "ai-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef5350;", "width": 160, "height": 60},
+    {"id": "embedding", "label": "Embedding\ntext-embedding-3", "group": "ai-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef5350;", "width": 160, "height": 60},
+    {"id": "mcp-ai", "label": "MCP 协议\nHTTP / Stdio", "group": "ai-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef5350;", "width": 160, "height": 60},
+    {"id": "rag", "label": "RAG 检索\n向量 + 混合检索", "group": "ai-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef5350;", "width": 160, "height": 60},
+    {"id": "memory", "label": "记忆管理\nWindow / Summary", "group": "ai-group", "style": "rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ef5350;", "width": 160, "height": 60}
+  ],
+  "edges": [
+    {"source": "frontend-group", "target": "gateway-group", "label": ""},
+    {"source": "gateway-group", "target": "service-group", "label": ""},
+    {"source": "service-group", "target": "data-group", "label": ""},
+    {"source": "ai-group", "target": "service-group", "label": "调用", "style": "dashed=1;"},
+    {"source": "ai-group", "target": "data-group", "label": "检索 / 存储", "style": "dashed=1;"}
+  ]
+}
