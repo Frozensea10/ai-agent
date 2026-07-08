@@ -58,56 +58,37 @@ docker-compose up -d
 docker-compose down -v && docker-compose up -d
 ```
 
-### 5. 一键启动（推荐）
+### 5. 启动后端服务
 
-项目已提供统一启动脚本，会自动检查端口占用、加载 `.env`、启动 Docker 基础设施、按顺序启动 7 个后端服务，最后启动前端 dev server。
+当前项目暂未提供一键启动脚本，需要手动在 IDE 中启动各微服务，或在 `ai-agent-platform` 目录下逐个运行 Maven 命令。
 
-**Windows（PowerShell 7+）：**
+启动顺序：
 
-```powershell
-# 从项目根目录执行
-./scripts/start-local.ps1
+1. `ai-agent-gateway`
+2. `ai-agent-user`
+3. `ai-agent-core`
+4. `ai-agent-chat`
+5. `ai-agent-knowledge`
+6. `ai-agent-file`
+7. `ai-agent-mcp`
 
-# 如果本地 MySQL 服务占用 3306，可加 -StopMySQLService 自动停止
-./scripts/start-local.ps1 -StopMySQLService
-
-# 跳过基础设施/后端/前端中的某一部分
-./scripts/start-local.ps1 -SkipInfra -SkipFrontend
-```
-
-**Linux / macOS：**
-
-```bash
-# 从项目根目录执行
-./scripts/start-local.sh
-
-# 如果本地 MySQL 服务占用 3306，可加 --stop-mysql-service
-./scripts/start-local.sh --stop-mysql-service
-
-# 跳过基础设施/后端/前端中的某一部分
-./scripts/start-local.sh --skip-infra --skip-frontend
-```
-
-脚本会在每个服务启动后等待 `/actuator/health` 就绪，因此首次启动可能需要几分钟。
-
-### 6. 手动启动后端服务（备选）
-
-如果不想使用脚本，可以在 `ai-agent-platform` 目录下逐个启动微服务（确保第 1 步的环境变量已加载）：
+Maven 启动示例（Windows 环境）：
 
 ```bash
 cd ai-agent-platform
 
-# 启动顺序：gateway -> user -> core -> chat -> knowledge -> mcp -> file
 mvn -pl ai-agent-gateway spring-boot:run -D"spring-boot.run.profiles=dev"
 mvn -pl ai-agent-user spring-boot:run -D"spring-boot.run.profiles=dev"
 mvn -pl ai-agent-core spring-boot:run -D"spring-boot.run.profiles=dev"
 mvn -pl ai-agent-chat spring-boot:run -D"spring-boot.run.profiles=dev"
 mvn -pl ai-agent-knowledge spring-boot:run -D"spring-boot.run.profiles=dev"
-mvn -pl ai-agent-mcp spring-boot:run -D"spring-boot.run.profiles=dev"
 mvn -pl ai-agent-file spring-boot:run -D"spring-boot.run.profiles=dev"
+mvn -pl ai-agent-mcp spring-boot:run -D"spring-boot.run.profiles=dev"
 ```
 
-### 7. 手动启动前端（备选）
+> 手动启动前请确保已通过 `.env` 文件或环境变量加载 `JWT_SECRET` 和 LLM API Key。
+
+### 6. 启动前端
 
 ```bash
 cd ai-agent-web
@@ -156,3 +137,4 @@ docker-compose down -v
 - 大模型对话必须配置至少一个 LLM API Key，否则聊天接口会返回“模型提供商未配置”的友好提示。
 - 如果本地已有 MySQL 服务占用 3306 端口，请先停止该服务，否则后端会连接错误的数据库实例。
 - 前端代码变更会自动热更新；后端代码变更需要重启对应服务。
+- 手动启动微服务时，建议在 IntelliJ IDEA 中按顺序启动，并确认每个服务在 Nacos 注册成功。

@@ -78,7 +78,7 @@
               v-model="inputMessage"
               type="textarea"
               :rows="4"
-              placeholder="帮你编写代码、调试 Bug、优化性能等开发工作，交付生产级代码产物。"
+              placeholder="输入消息..."
               @keyup.enter.ctrl="sendMessage"
               resize="none"
               class="modern-textarea"
