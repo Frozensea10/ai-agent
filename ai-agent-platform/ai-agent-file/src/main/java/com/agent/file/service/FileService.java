@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +54,10 @@ public class FileService {
         }
         String objectName = UUID.randomUUID().toString().replace("-", "") + extension;
 
+        Map<String, String> userMetadata = new HashMap<>();
+        userMetadata.put("X-Amz-Meta-Original-Filename", originalFilename != null ? originalFilename : objectName);
+        userMetadata.put("X-Amz-Meta-Upload-Time", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
         ensureBucketExists();
 
         try (InputStream inputStream = file.getInputStream()) {
@@ -61,6 +67,7 @@ public class FileService {
                             .object(objectName)
                             .stream(inputStream, file.getSize(), -1)
                             .contentType(file.getContentType())
+                            .userMetadata(userMetadata)
                             .build()
             );
             return objectName;
@@ -160,6 +167,8 @@ public class FileService {
             );
             Map<String, Object> info = new HashMap<>();
             info.put("objectName", stat.object());
+            info.put("originalName", getMetadataValue(stat.userMetadata(), "X-Amz-Meta-Original-Filename", stat.object()));
+            info.put("uploadTime", getMetadataValue(stat.userMetadata(), "X-Amz-Meta-Upload-Time", stat.lastModified() != null ? stat.lastModified().toString() : null));
             info.put("size", stat.size());
             info.put("contentType", stat.contentType());
             info.put("lastModified", stat.lastModified());
@@ -191,6 +200,17 @@ public class FileService {
         if (lower.endsWith(".ppt")) return "application/vnd.ms-powerpoint";
         if (lower.endsWith(".pptx")) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
         return "application/octet-stream";
+    }
+
+    private String getMetadataValue(Map<String, String> userMetadata, String key, String defaultValue) {
+        if (userMetadata == null) {
+            return defaultValue;
+        }
+        String value = userMetadata.get(key);
+        if (value == null || value.isBlank()) {
+            value = userMetadata.get(key.toLowerCase());
+        }
+        return value != null && !value.isBlank() ? value : defaultValue;
     }
 
     private void ensureBucketExists() {

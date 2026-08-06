@@ -32,8 +32,8 @@
             <el-icon><Document /></el-icon>
           </div>
           <div class="file-info">
-            <div class="file-name" :title="file.objectName">{{ file.objectName }}</div>
-            <div class="file-date">{{ formatDate(file.lastModified) }}</div>
+            <div class="file-name" :title="file.originalName || file.objectName">{{ file.originalName || file.objectName }}</div>
+            <div class="file-date">{{ formatDate(file.uploadTime || file.lastModified) }}</div>
           </div>
         </div>
         <div class="file-col-size">{{ formatSize(file.size) }}</div>

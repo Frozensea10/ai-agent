@@ -36,16 +36,6 @@
             <h3>{{ currentSession?.sessionTitle || '新对话' }}</h3>
             <span v-if="currentSession?.kbCode" class="kb-tag">KB: {{ currentSession.kbCode }}</span>
           </div>
-          <div class="model-select-wrap">
-            <el-select v-model="selectedAgentId" placeholder="选择 Agent" size="small" style="width: 140px" @change="handleAgentChange">
-              <el-option
-                v-for="opt in agentOptions"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-          </div>
         </div>
 
         <div class="chat-messages" ref="messagesRef">
@@ -87,14 +77,6 @@
               <div class="toolbar-left">
               </div>
               <div class="toolbar-right">
-                <el-select v-model="selectedModel" placeholder="选择模型" clearable size="small" class="model-select-inline">
-                  <el-option
-                    v-for="opt in modelOptions"
-                    :key="opt.value"
-                    :label="opt.label"
-                    :value="opt.value"
-                  />
-                </el-select>
                 <button class="send-circle-btn" :disabled="sending || !inputMessage.trim()" @click="sendMessage">
                   <el-icon v-if="!sending"><Top /></el-icon>
                   <span v-else>发送中</span>
@@ -149,9 +131,7 @@ import { ChatDotRound, User, Plus, ChatSquare, Menu, Delete, Top } from '@elemen
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listSessions, createSession, deleteSession, getMessages, streamChat } from '@/api/chat'
 import { getKnowledgeBases } from '@/api/knowledge'
-import { listModelProviders } from '@/api/settings'
 import { getAgent, listAgents } from '@/api/agent'
-import { providerLabelMap } from '@/utils/provider'
 import type { ChatSession, ChatMessage } from '@/types/chat'
 import type { KnowledgeBase } from '@/types/knowledge'
 import type { AgentConfig } from '@/types/agent'
@@ -173,9 +153,7 @@ const newChatDialogVisible = ref(false)
 const newChatTitle = ref('新对话')
 const newChatAgentId = ref<number>(DEFAULT_AGENT_ID)
 const newChatKbId = ref<number | undefined>(undefined)
-const selectedModel = ref<string>('')
 const selectedAgentId = ref<number>(DEFAULT_AGENT_ID)
-const providerConfigs = ref<{ providerName: string; apiKey?: string; modelName?: string; enabled?: number }[]>([])
 const defaultAgent = ref<AgentConfig | null>(null)
 const agents = ref<AgentConfig[]>([])
 
@@ -188,35 +166,6 @@ const agentOptions = computed(() => {
 
 const currentAgent = computed(() => {
   return agents.value.find((a) => a.id === selectedAgentId.value) || defaultAgent.value
-})
-
-const modelOptions = computed(() => {
-  const options = providerConfigs.value
-    .filter(item => item.enabled !== 0 && item.modelName)
-    .map(item => ({
-      label: `${providerLabelMap[item.providerName] || item.providerName} · ${item.modelName}`,
-      value: `${item.providerName}:${item.modelName}`
-    }))
-  const agent = currentAgent.value
-  if (agent?.modelProvider && agent?.modelName) {
-    const defaultValue = `${agent.modelProvider}:${agent.modelName}`
-    if (!options.some(opt => opt.value === defaultValue)) {
-      options.unshift({
-        label: `${providerLabelMap[agent.modelProvider] || agent.modelProvider} · ${agent.modelName}（Agent 默认）`,
-        value: defaultValue
-      })
-    }
-  }
-  return options
-})
-
-const parsedSelectedModel = computed(() => {
-  if (!selectedModel.value) return { modelProvider: undefined, modelName: undefined }
-  const [provider, ...modelParts] = selectedModel.value.split(':')
-  return {
-    modelProvider: provider,
-    modelName: modelParts.join(':')
-  }
 })
 
 const currentSession = computed(() => {
@@ -277,21 +226,10 @@ const loadKnowledgeBases = async () => {
   }
 }
 
-const loadModelProviders = async () => {
-  try {
-    providerConfigs.value = await listModelProviders()
-  } catch (e) {
-    ElMessage.error('加载模型配置失败')
-  }
-}
-
 const loadDefaultAgent = async () => {
   try {
     const agent = await getAgent(DEFAULT_AGENT_ID)
     defaultAgent.value = agent
-    if (!route.query.agentId && agent.modelProvider && agent.modelName) {
-      selectedModel.value = `${agent.modelProvider}:${agent.modelName}`
-    }
   } catch (e) {
     ElMessage.error('加载默认 Agent 失败')
   }
@@ -314,10 +252,6 @@ const initSelectedAgent = () => {
     selectedAgentId.value = agents.value[0].id || DEFAULT_AGENT_ID
   } else {
     selectedAgentId.value = DEFAULT_AGENT_ID
-  }
-  const agent = currentAgent.value
-  if (agent?.modelProvider && agent?.modelName) {
-    selectedModel.value = `${agent.modelProvider}:${agent.modelName}`
   }
 }
 
@@ -427,21 +361,8 @@ const sendMessage = async () => {
       ElMessage.error(error)
       nextTick(scrollToBottom)
     },
-    currentSession.value?.kbCode,
-    parsedSelectedModel.value.modelProvider,
-    parsedSelectedModel.value.modelName
+    currentSession.value?.kbCode
   )
-}
-
-const handleAgentChange = (agentId: number) => {
-  selectedAgentId.value = agentId
-  const agent = currentAgent.value
-  if (agent?.modelProvider && agent?.modelName) {
-    selectedModel.value = `${agent.modelProvider}:${agent.modelName}`
-  }
-  if (route.query.agentId) {
-    router.replace({ path: route.path })
-  }
 }
 
 watch(
@@ -459,7 +380,6 @@ onMounted(async () => {
   initSelectedAgent()
   loadSessions()
   loadKnowledgeBases()
-  loadModelProviders()
   loadDefaultAgent()
 })
 
@@ -589,10 +509,6 @@ onUnmounted(() => {
   padding: 16px 24px;
   border-bottom: 3px solid var(--text-dark);
   background: var(--card-bg);
-}
-
-.model-select-wrap {
-  margin-left: auto;
 }
 
 .chat-main-header h3 {
@@ -754,22 +670,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.model-select-inline {
-  width: 160px;
-}
-
-.model-select-inline :deep(.el-input__wrapper) {
-  border-radius: 10px;
-  background: #f7f7f7;
-  box-shadow: none !important;
-  border: 1px solid transparent;
-}
-
-.model-select-inline :deep(.el-input__inner) {
-  font-size: 13px;
-  color: var(--text-dark);
 }
 
 .send-circle-btn {

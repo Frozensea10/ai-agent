@@ -90,10 +90,8 @@
         </el-form-item>
         <el-form-item label="模型提供商" required>
           <el-select v-model="agentForm.modelProvider" placeholder="选择模型提供商" style="width: 100%">
-            <el-option label="OpenAI" value="openai" />
             <el-option label="DeepSeek" value="deepseek" />
             <el-option label="通义千问" value="qwen" />
-            <el-option label="Anthropic" value="anthropic" />
           </el-select>
         </el-form-item>
         <el-form-item label="模型名称" required>
@@ -142,7 +140,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus, Search, Edit, ChatDotRound, Star, Cpu, Timer, Delete } from '@element-plus/icons-vue'
 import { listAgents, createAgent, updateAgent, deleteAgent } from '@/api/agent'
 import { listModelProviders } from '@/api/settings'
@@ -161,18 +159,16 @@ const agents = ref<AgentConfig[]>([])
 const providerConfigs = ref<Record<string, { apiKey?: string; modelName?: string; enabled?: number }>>({})
 
 const recommendedModels: Record<string, string[]> = {
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-  qwen: ['qwen-turbo', 'qwen-plus', 'qwen-max'],
-  anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307']
+  qwen: ['qwen-turbo', 'qwen-plus', 'qwen-max']
 }
 
 const agentForm = reactive<AgentForm>({
   agentName: '',
   agentCode: '',
   description: '',
-  modelProvider: 'openai',
-  modelName: 'gpt-3.5-turbo',
+  modelProvider: 'deepseek',
+  modelName: 'deepseek-chat',
   systemPrompt: '',
   temperature: 0.7,
   maxTokens: 2048,
@@ -231,8 +227,8 @@ const resetForm = () => {
   agentForm.agentName = ''
   agentForm.agentCode = ''
   agentForm.description = ''
-  agentForm.modelProvider = 'openai'
-  agentForm.modelName = 'gpt-3.5-turbo'
+  agentForm.modelProvider = 'deepseek'
+  agentForm.modelName = 'deepseek-chat'
   agentForm.systemPrompt = ''
   agentForm.temperature = 0.7
   agentForm.maxTokens = 2048
@@ -310,13 +306,15 @@ const toggleStatus = async (agent: AgentConfig, enabled: boolean) => {
 }
 
 const handleDeleteAgent = async (agent: AgentConfig) => {
+  if (!window.confirm(`确定删除 Agent「${agent.agentName}」吗？`)) {
+    return
+  }
   try {
-    await ElMessageBox.confirm(`确定删除 Agent「${agent.agentName}」吗？`, '提示', { type: 'warning' })
     await deleteAgent(agent.id)
     ElMessage.success('删除成功')
     await loadAgents()
   } catch {
-    // cancel
+    ElMessage.error('删除失败')
   }
 }
 

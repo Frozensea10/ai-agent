@@ -137,7 +137,7 @@ public class AgentConfigService {
     }
 
     private boolean isSystemAgent(AgentConfig config) {
-        return SYSTEM_USER_ID.equals(config.getCreatedBy()) || "default-assistant".equals(config.getAgentCode());
+        return "default-assistant".equals(config.getAgentCode());
     }
 
     @Cacheable(value = CACHE_NAME, key = CACHE_KEY_PREFIX + " + #agentCode")
