@@ -38,8 +38,8 @@ minio:
   bucket-name: ai-agent-files
 
 jwt:
-  # 生产环境请务必通过环境变量 JWT_SECRET 覆盖，不要使用默认值
-  secret: ${JWT_SECRET:AiAgentPlatformDefaultSecretKey2026!@#$
+  # 生产环境请务必通过环境变量 JWT_SECRET 覆盖，默认值与其他模块保持一致
+  secret: ${JWT_SECRET:AiAgentPlatformDevSecretKey2026!@#$}
 
 logging:
   level:
