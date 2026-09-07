@@ -1,231 +1,97 @@
 package com.agent.file.service;
 
 import com.agent.common.exception.BusinessException;
-import com.agent.common.exception.ErrorCode;
-import com.agent.file.config.MinioConfig;
-import io.minio.GetObjectArgs;
-import io.minio.ListObjectsArgs;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.RemoveObjectArgs;
-import io.minio.Result;
-import io.minio.StatObjectArgs;
-import io.minio.StatObjectResponse;
-import io.minio.http.Method;
-import io.minio.messages.Item;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
+import com.agent.file.vo.FileDownloadVO;
+import com.agent.file.vo.FileInfoVO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class FileService {
+/**
+ * 文件服务层，负责文件的上传、下载、删除、信息查询等核心操作。
+ * <p>
+ * 基于 MinIO 对象存储实现，统一处理存储桶的自动创建与常见业务异常。
+ *
+ * @author agent
+ */
+public interface FileService {
 
-    private final MinioClient minioClient;
-    private final MinioConfig minioConfig;
+    /**
+     * 上传文件到 MinIO。
+     *
+     * @param file 待上传的文件
+     * @return 文件在存储桶中的对象名称
+     * @throws BusinessException 当文件为空、超过大小限制或上传失败时抛出
+     */
+    String upload(MultipartFile file);
 
-    private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
-    private static final int MAX_LIST_LIMIT = 1000;
+    /**
+     * 从 MinIO 下载文件。
+     *
+     * @param objectName 文件对象名称
+     * @return 文件输入流
+     * @throws BusinessException 当文件不存在或下载失败时抛出
+     */
+    InputStream download(String objectName);
 
-    public String upload(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "文件不能为空");
-        }
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "文件大小不能超过 50MB");
-        }
+    /**
+     * 获取文件的预签名访问地址。
+     *
+     * @param objectName 文件对象名称
+     * @return 可直接访问的预览 URL，有效期 7 天
+     * @throws BusinessException 当生成链接失败时抛出
+     */
+    String getPreviewUrl(String objectName);
 
-        String originalFilename = file.getOriginalFilename();
-        String extension = "";
-        if (originalFilename != null && originalFilename.contains(".")) {
-            extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-        }
-        String objectName = UUID.randomUUID().toString().replace("-", "") + extension;
+    /**
+     * 列出存储桶中所有文件的对象名称。
+     *
+     * @return 文件对象名称列表，最多返回 1000 条
+     * @throws BusinessException 当查询失败时抛出
+     */
+    List<String> listObjects();
 
-        Map<String, String> userMetadata = new HashMap<>();
-        userMetadata.put("X-Amz-Meta-Original-Filename", originalFilename != null ? originalFilename : objectName);
-        userMetadata.put("X-Amz-Meta-Upload-Time", LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+    /**
+     * 查询文件列表，组装元数据与预览地址。
+     *
+     * @return 文件信息视图对象列表
+     * @throws BusinessException 当对象名称列表查询失败时抛出
+     */
+    List<FileInfoVO> listFileInfos();
 
-        ensureBucketExists();
+    /**
+     * 下载文件并封装为视图对象，读取全部字节内容。
+     *
+     * @param objectName 文件对象名称
+     * @return 包含文件字节、文件名与 Content-Type 的下载结果
+     * @throws BusinessException 当对象名称为空、文件不存在或下载失败时抛出
+     */
+    FileDownloadVO downloadFile(String objectName);
 
-        try (InputStream inputStream = file.getInputStream()) {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(minioConfig.getBucketName())
-                            .object(objectName)
-                            .stream(inputStream, file.getSize(), -1)
-                            .contentType(file.getContentType())
-                            .userMetadata(userMetadata)
-                            .build()
-            );
-            return objectName;
-        } catch (Exception e) {
-            log.error("文件上传失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "文件上传失败: " + e.getMessage());
-        }
-    }
+    /**
+     * 删除指定文件。
+     *
+     * @param objectName 文件对象名称
+     * @throws BusinessException 当对象名称为空或删除失败时抛出
+     */
+    void deleteObject(String objectName);
 
-    public InputStream download(String objectName) {
-        ensureBucketExists();
-        try {
-            return minioClient.getObject(
-                    GetObjectArgs.builder()
-                            .bucket(minioConfig.getBucketName())
-                            .object(objectName)
-                            .build()
-            );
-        } catch (Exception e) {
-            log.error("文件下载失败, objectName={}", objectName, e);
-            throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "文件不存在或下载失败");
-        }
-    }
+    /**
+     * 获取文件的元数据信息。
+     *
+     * @param objectName 文件对象名称
+     * @return 包含对象名、原始文件名、上传时间、大小、Content-Type 等信息的 Map
+     * @throws BusinessException 当对象名称为空或查询失败时抛出
+     */
+    Map<String, Object> getObjectInfo(String objectName);
 
-    public String getPreviewUrl(String objectName) {
-        ensureBucketExists();
-        try {
-            return minioClient.getPresignedObjectUrl(
-                    io.minio.GetPresignedObjectUrlArgs.builder()
-                            .method(Method.GET)
-                            .bucket(minioConfig.getBucketName())
-                            .object(objectName)
-                            .expiry(7, TimeUnit.DAYS)
-                            .build()
-            );
-        } catch (Exception e) {
-            log.error("生成文件访问链接失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "生成文件访问链接失败");
-        }
-    }
-
-    public List<String> listObjects() {
-        ensureBucketExists();
-        List<String> objectNames = new ArrayList<>();
-        try {
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(minioConfig.getBucketName())
-                            .maxKeys(MAX_LIST_LIMIT)
-                            .build()
-            );
-            int count = 0;
-            for (Result<Item> result : results) {
-                if (count >= MAX_LIST_LIMIT) {
-                    break;
-                }
-                Item item = result.get();
-                objectNames.add(item.objectName());
-                count++;
-            }
-            return objectNames;
-        } catch (Exception e) {
-            log.error("文件列表查询失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "文件列表查询失败: " + e.getMessage());
-        }
-    }
-
-    public void deleteObject(String objectName) {
-        if (objectName == null || objectName.isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "对象名称不能为空");
-        }
-        ensureBucketExists();
-        try {
-            minioClient.removeObject(
-                    RemoveObjectArgs.builder()
-                            .bucket(minioConfig.getBucketName())
-                            .object(objectName)
-                            .build()
-            );
-        } catch (Exception e) {
-            log.error("文件删除失败, objectName={}", objectName, e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "文件删除失败: " + e.getMessage());
-        }
-    }
-
-    public Map<String, Object> getObjectInfo(String objectName) {
-        if (objectName == null || objectName.isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR.getCode(), "对象名称不能为空");
-        }
-        ensureBucketExists();
-        try {
-            StatObjectResponse stat = minioClient.statObject(
-                    StatObjectArgs.builder()
-                            .bucket(minioConfig.getBucketName())
-                            .object(objectName)
-                            .build()
-            );
-            Map<String, Object> info = new HashMap<>();
-            info.put("objectName", stat.object());
-            info.put("originalName", getMetadataValue(stat.userMetadata(), "X-Amz-Meta-Original-Filename", stat.object()));
-            info.put("uploadTime", getMetadataValue(stat.userMetadata(), "X-Amz-Meta-Upload-Time", stat.lastModified() != null ? stat.lastModified().toString() : null));
-            info.put("size", stat.size());
-            info.put("contentType", stat.contentType());
-            info.put("lastModified", stat.lastModified());
-            return info;
-        } catch (Exception e) {
-            log.error("获取文件信息失败, objectName={}", objectName, e);
-            throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "文件不存在或获取信息失败");
-        }
-    }
-
-    public String detectContentType(String objectName) {
-        if (objectName == null) {
-            return "application/octet-stream";
-        }
-        String lower = objectName.toLowerCase();
-        if (lower.endsWith(".pdf")) return "application/pdf";
-        if (lower.endsWith(".txt")) return "text/plain";
-        if (lower.endsWith(".md")) return "text/markdown";
-        if (lower.endsWith(".json")) return "application/json";
-        if (lower.endsWith(".png")) return "image/png";
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-        if (lower.endsWith(".gif")) return "image/gif";
-        if (lower.endsWith(".svg")) return "image/svg+xml";
-        if (lower.endsWith(".mp4")) return "video/mp4";
-        if (lower.endsWith(".doc")) return "application/msword";
-        if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-        if (lower.endsWith(".xls")) return "application/vnd.ms-excel";
-        if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        if (lower.endsWith(".ppt")) return "application/vnd.ms-powerpoint";
-        if (lower.endsWith(".pptx")) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-        return "application/octet-stream";
-    }
-
-    private String getMetadataValue(Map<String, String> userMetadata, String key, String defaultValue) {
-        if (userMetadata == null) {
-            return defaultValue;
-        }
-        String value = userMetadata.get(key);
-        if (value == null || value.isBlank()) {
-            value = userMetadata.get(key.toLowerCase());
-        }
-        return value != null && !value.isBlank() ? value : defaultValue;
-    }
-
-    private void ensureBucketExists() {
-        try {
-            boolean exists = minioClient.bucketExists(
-                    io.minio.BucketExistsArgs.builder().bucket(minioConfig.getBucketName()).build()
-            );
-            if (!exists) {
-                minioClient.makeBucket(
-                        io.minio.MakeBucketArgs.builder().bucket(minioConfig.getBucketName()).build()
-                );
-            }
-        } catch (Exception e) {
-            log.error("MinIO bucket 检查失败", e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR.getCode(), "MinIO bucket 检查失败");
-        }
-    }
+    /**
+     * 根据文件扩展名推断 Content-Type。
+     *
+     * @param objectName 文件对象名称
+     * @return 对应的 MIME 类型，无法识别时返回 {@code application/octet-stream}
+     */
+    String detectContentType(String objectName);
 }

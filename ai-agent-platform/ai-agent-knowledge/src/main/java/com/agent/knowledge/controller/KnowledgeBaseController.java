@@ -1,5 +1,6 @@
 package com.agent.knowledge.controller;
 
+import com.agent.common.constant.CommonConstants;
 import com.agent.common.result.Result;
 import com.agent.knowledge.rag.RAGService;
 import com.agent.knowledge.service.KnowledgeBaseService;
@@ -24,14 +25,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class KnowledgeBaseController {
 
+    /** 知识库业务服务 */
     private final KnowledgeBaseService knowledgeBaseService;
+    /** RAG 检索服务 */
     private final RAGService ragService;
 
     @Operation(summary = "创建知识库", description = "为当前用户创建新的知识库")
     @PostMapping
     public Result<KnowledgeBaseVO> createKnowledgeBase(
             @Valid @RequestBody CreateKBRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
         return Result.success(knowledgeBaseService.createKnowledgeBase(
                 request.getKbName(), request.getKbCode(),
                 request.getDescription(), request.getEmbeddingModel(),
@@ -41,7 +44,7 @@ public class KnowledgeBaseController {
     @Operation(summary = "查询知识库列表", description = "查询当前用户的所有知识库")
     @GetMapping
     public Result<List<KnowledgeBaseVO>> listKnowledgeBases(
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
         return Result.success(knowledgeBaseService.listKnowledgeBases(userId));
     }
 
@@ -49,7 +52,7 @@ public class KnowledgeBaseController {
     @GetMapping("/{id}")
     public Result<KnowledgeBaseVO> getKnowledgeBase(
             @PathVariable Long id,
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
         return Result.success(knowledgeBaseService.getKnowledgeBase(id, userId));
     }
 
@@ -58,7 +61,7 @@ public class KnowledgeBaseController {
     public Result<KnowledgeBaseVO> updateKnowledgeBase(
             @PathVariable Long id,
             @Valid @RequestBody UpdateKBRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
         return Result.success(knowledgeBaseService.updateKnowledgeBase(
                 id, request.getKbName(), request.getDescription(),
                 request.getEmbeddingModel(), request.getEmbeddingProvider(), userId));
@@ -68,7 +71,7 @@ public class KnowledgeBaseController {
     @DeleteMapping("/{id}")
     public Result<Void> deleteKnowledgeBase(
             @PathVariable Long id,
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
         knowledgeBaseService.deleteKnowledgeBase(id, userId);
         return Result.success();
     }
@@ -80,7 +83,7 @@ public class KnowledgeBaseController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "fileUrl", required = false) String fileUrl,
             @RequestParam(value = "fileKey", required = false) String fileKey,
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
         return Result.success(knowledgeBaseService.uploadDocument(kbId, file, fileUrl, fileKey, userId));
     }
 
@@ -88,7 +91,7 @@ public class KnowledgeBaseController {
     @GetMapping("/{kbId}/documents")
     public Result<List<KnowledgeDocumentVO>> listDocuments(
             @PathVariable Long kbId,
-            @RequestHeader("X-User-Id") Long userId) {
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
         return Result.success(knowledgeBaseService.listDocuments(kbId, userId));
     }
 
@@ -97,67 +100,73 @@ public class KnowledgeBaseController {
     public Result<List<RAGService.RetrievalResult>> retrieve(
             @PathVariable String kbCode,
             @Valid @RequestBody RetrieveRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
-        KnowledgeBaseVO kb = knowledgeBaseService.getKnowledgeBaseByCode(kbCode, userId);
-        return Result.success(ragService.retrieve(kbCode, request.getQuery(),
-                request.getTopK() != null ? request.getTopK() : 10,
-                kb.getEmbeddingProvider(), kb.getEmbeddingModel()));
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
+        return Result.success(ragService.retrieve(kbCode, request.getQuery(), request.getTopK(), userId));
     }
 
     @Operation(summary = "RAG 查询", description = "在指定知识库中检索并构建增强提示词")
     @PostMapping("/{kbCode}/rag")
-    public Result<RAGResponse> ragQuery(
+    public Result<RAGService.RAGQueryResult> ragQuery(
             @PathVariable String kbCode,
             @Valid @RequestBody RAGQueryRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
-        KnowledgeBaseVO kb = knowledgeBaseService.getKnowledgeBaseByCode(kbCode, userId);
-        List<RAGService.RetrievalResult> results = ragService.retrieve(kbCode, request.getQuery(),
-                request.getTopK() != null ? request.getTopK() : 10,
-                kb.getEmbeddingProvider(), kb.getEmbeddingModel());
-        String context = ragService.buildContext(results);
-        String prompt = ragService.buildPrompt(request.getQuery(), context, request.getSystemPrompt());
-
-        RAGResponse response = new RAGResponse();
-        response.setPrompt(prompt);
-        response.setContext(context);
-        response.setReferences(results);
-        return Result.success(response);
+            @RequestHeader(CommonConstants.HEADER_USER_ID) Long userId) {
+        return Result.success(ragService.ragQuery(kbCode, request.getQuery(),
+                request.getTopK(), request.getSystemPrompt(), userId));
     }
 
+    /**
+     * 更新知识库请求体。
+     */
     @lombok.Data
     public static class UpdateKBRequest {
+        /** 知识库名称 */
         private String kbName;
+        /** 知识库描述 */
         private String description;
+        /** Embedding 模型名称 */
         private String embeddingModel;
+        /** Embedding 提供商标识 */
         private String embeddingProvider;
     }
 
+    /**
+     * 创建知识库请求体。
+     */
     @lombok.Data
     public static class CreateKBRequest {
+        /** 知识库名称（必填） */
         @NotBlank private String kbName;
+        /** 知识库编码（必填，唯一） */
         @NotBlank private String kbCode;
+        /** 知识库描述 */
         private String description;
+        /** Embedding 模型名称 */
         private String embeddingModel;
+        /** Embedding 提供商标识 */
         private String embeddingProvider;
     }
 
+    /**
+     * 文档片段检索请求体。
+     */
     @lombok.Data
     public static class RetrieveRequest {
+        /** 查询文本（必填） */
         @NotBlank private String query;
+        /** 返回的最大结果数，默认 10，最大 20 */
         @Max(value = 20, message = "topK 不能超过 20") private Integer topK;
     }
 
+    /**
+     * RAG 查询请求体。
+     */
     @lombok.Data
     public static class RAGQueryRequest {
+        /** 查询文本（必填） */
         @NotBlank private String query;
+        /** 系统提示词（可选） */
         private String systemPrompt;
+        /** 返回的最大结果数，默认 10，最大 20 */
         @Max(value = 20, message = "topK 不能超过 20") private Integer topK;
-    }
-
-    @lombok.Data
-    public static class RAGResponse {
-        private String prompt;
-        private String context;
-        private List<RAGService.RetrievalResult> references;
     }
 }

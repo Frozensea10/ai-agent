@@ -27,7 +27,7 @@ class SessionServiceTest {
     private ChatSessionMapper sessionMapper;
 
     @InjectMocks
-    private SessionService sessionService;
+    private SessionServiceImpl sessionService;
 
     @Test
     @DisplayName("创建会话成功并填充默认值")

@@ -69,7 +69,7 @@ class KnowledgeBaseServiceTest {
     private DocumentAsyncProcessor documentAsyncProcessor;
 
     @InjectMocks
-    private KnowledgeBaseService knowledgeBaseService;
+    private KnowledgeBaseServiceImpl knowledgeBaseService;
 
     private static final Long USER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;

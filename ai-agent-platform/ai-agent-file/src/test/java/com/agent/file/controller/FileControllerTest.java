@@ -5,6 +5,8 @@ import com.agent.common.exception.ErrorCode;
 import com.agent.common.exception.GlobalExceptionHandler;
 import com.agent.file.config.MinioConfig;
 import com.agent.file.service.FileService;
+import com.agent.file.vo.FileDownloadVO;
+import com.agent.file.vo.FileInfoVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -13,9 +15,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.HashMap;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -64,21 +65,43 @@ class FileControllerTest {
 
     @Test
     void listFiles_shouldReturnFileList() throws Exception {
-        given(fileService.listObjects()).willReturn(List.of("a.txt", "b.txt"));
-
-        Map<String, Object> infoA = new HashMap<>();
-        infoA.put("objectName", "a.txt");
-        infoA.put("size", 100L);
-        infoA.put("contentType", "text/plain");
-        infoA.put("url", "http://minio/a.txt");
-
-        given(fileService.getObjectInfo(anyString())).willReturn(infoA);
-        given(fileService.getPreviewUrl(anyString())).willReturn("http://minio/a.txt");
+        FileInfoVO vo = new FileInfoVO();
+        vo.setObjectName("a.txt");
+        vo.setSize(100L);
+        vo.setContentType("text/plain");
+        vo.setUrl("http://minio/a.txt");
+        given(fileService.listFileInfos()).willReturn(List.of(vo));
 
         mockMvc.perform(get("/api/v1/files"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code", is(200)))
-                .andExpect(jsonPath("$.data[0].objectName", is("a.txt")));
+                .andExpect(jsonPath("$.data[0].objectName", is("a.txt")))
+                .andExpect(jsonPath("$.data[0].url", is("http://minio/a.txt")));
+    }
+
+    @Test
+    void download_shouldWriteFileBytes_whenObjectExists() throws Exception {
+        byte[] content = "hello".getBytes(StandardCharsets.UTF_8);
+        given(fileService.downloadFile("object.txt"))
+                .willReturn(new FileDownloadVO(content, "object.txt", "text/plain", 5L));
+
+        mockMvc.perform(get("/api/v1/files/{objectName}", "object.txt"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "text/plain;charset=UTF-8"))
+                .andExpect(header().string("Content-Length", "5"))
+                .andExpect(header().string("Content-Disposition", is("inline; filename=\"object.txt\"")))
+                .andExpect(content().bytes(content));
+    }
+
+    @Test
+    void download_shouldReturnNotFoundResult_whenObjectMissing() throws Exception {
+        doThrow(new BusinessException(ErrorCode.NOT_FOUND.getCode(), "文件不存在或获取信息失败"))
+                .when(fileService).downloadFile(anyString());
+
+        mockMvc.perform(get("/api/v1/files/{objectName}", "missing.txt"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code", is(404)))
+                .andExpect(jsonPath("$.message", is("文件不存在或获取信息失败")));
     }
 
     @Test

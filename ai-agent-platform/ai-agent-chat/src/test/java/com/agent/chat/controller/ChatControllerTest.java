@@ -3,24 +3,14 @@ package com.agent.chat.controller;
 import com.agent.chat.dto.CreateSessionRequest;
 import com.agent.chat.dto.SSEMessage;
 import com.agent.chat.dto.SendMessageRequest;
-import com.agent.chat.entity.ChatMessage;
-import com.agent.chat.entity.ChatSession;
-import com.agent.chat.feign.AgentFeignClient;
-import com.agent.chat.feign.KnowledgeFeignClient;
-import com.agent.chat.llm.ChatLLMService;
-import com.agent.chat.memory.ChatMemoryProvider;
-import com.agent.chat.service.MessageService;
-import com.agent.chat.service.SessionService;
-import com.agent.common.dto.AgentConfigDTO;
+import com.agent.chat.service.ChatBizService;
+import com.agent.chat.vo.ChatMessageVO;
+import com.agent.chat.vo.ChatSessionVO;
 import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
 import com.agent.common.exception.GlobalExceptionHandler;
 import com.agent.common.handler.MyMetaObjectHandler;
-import com.agent.common.result.Result;
-import com.agent.core.llm.service.LLMService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.StreamingChatModel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,76 +75,43 @@ class ChatControllerTest {
     private ObjectMapper objectMapper;
 
     @MockBean
-    private SessionService sessionService;
-
-    @MockBean
-    private MessageService messageService;
-
-    @MockBean
-    private ChatLLMService chatLLMService;
-
-    @MockBean
-    private LLMService llmService;
-
-    @MockBean
-    private AgentFeignClient agentFeignClient;
-
-    @MockBean
-    private KnowledgeFeignClient knowledgeFeignClient;
-
-    @MockBean
-    private ChatMemoryProvider chatMemoryProvider;
+    private ChatBizService chatBizService;
 
     private static final Long USER_ID = 1L;
     private static final String SESSION_ID = "session1234567890";
     private static final Long AGENT_ID = 2L;
     private static final Long KB_ID = 3L;
 
-    private ChatSession createSession() {
-        ChatSession session = new ChatSession();
-        session.setId(1L);
-        session.setSessionId(SESSION_ID);
-        session.setUserId(USER_ID);
-        session.setAgentId(AGENT_ID);
-        session.setKbId(KB_ID);
-        session.setSessionTitle("测试会话");
-        session.setMessageCount(0);
-        session.setStatus(1);
-        session.setCreatedAt(LocalDateTime.now());
-        session.setUpdatedAt(LocalDateTime.now());
-        return session;
+    private ChatSessionVO createSessionVO() {
+        ChatSessionVO vo = new ChatSessionVO();
+        vo.setId(1L);
+        vo.setSessionId(SESSION_ID);
+        vo.setAgentId(AGENT_ID);
+        vo.setKbId(KB_ID);
+        vo.setKbCode("test-kb");
+        vo.setSessionTitle("测试会话");
+        vo.setMessageCount(0);
+        vo.setStatus(1);
+        vo.setCreatedAt(LocalDateTime.now());
+        vo.setUpdatedAt(LocalDateTime.now());
+        return vo;
     }
 
-    private ChatMessage createMessage(String role, String content) {
-        ChatMessage message = new ChatMessage();
-        message.setId(1L);
-        message.setMessageId("msg_abc123");
-        message.setSessionId(SESSION_ID);
-        message.setRole(role);
-        message.setContent(content);
-        message.setContentType("text");
-        message.setCreatedAt(LocalDateTime.now());
-        return message;
-    }
-
-    private AgentConfigDTO createAgentConfig() {
-        AgentConfigDTO agent = new AgentConfigDTO();
-        agent.setId(AGENT_ID);
-        agent.setAgentName("测试助手");
-        agent.setModelProvider("openai");
-        agent.setModelName("gpt-4o-mini");
-        agent.setSystemPrompt("你是一个 helpful assistant。");
-        agent.setTemperature(0.7);
-        agent.setMaxTokens(1024);
-        agent.setMemoryType("window");
-        agent.setMemoryMaxMessages(10);
-        return agent;
+    private ChatMessageVO createMessageVO(String role, String content) {
+        ChatMessageVO vo = new ChatMessageVO();
+        vo.setId(1L);
+        vo.setMessageId("msg_abc123");
+        vo.setRole(role);
+        vo.setContent(content);
+        vo.setContentType("text");
+        vo.setCreatedAt(LocalDateTime.now());
+        return vo;
     }
 
     @Test
     @DisplayName("listSessions: 返回当前用户会话列表")
     void listSessions_shouldReturnSessionList() throws Exception {
-        when(sessionService.listSessions(USER_ID)).thenReturn(List.of(createSession()));
+        when(chatBizService.listSessions(USER_ID)).thenReturn(List.of(createSessionVO()));
 
         mockMvc.perform(get("/api/v1/sessions")
                         .header("X-User-Id", USER_ID))
@@ -167,8 +124,8 @@ class ChatControllerTest {
     @Test
     @DisplayName("createSession: 创建会话成功")
     void createSession_shouldReturnSuccess() throws Exception {
-        when(sessionService.createSession(USER_ID, AGENT_ID, KB_ID, "测试会话"))
-                .thenReturn(createSession());
+        when(chatBizService.createSession(eq(USER_ID), any(CreateSessionRequest.class)))
+                .thenReturn(createSessionVO());
 
         CreateSessionRequest request = new CreateSessionRequest();
         request.setAgentId(AGENT_ID);
@@ -203,8 +160,7 @@ class ChatControllerTest {
     @Test
     @DisplayName("deleteSession: 删除会话成功")
     void deleteSession_shouldReturnSuccess() throws Exception {
-        doNothing().when(sessionService).deleteSession(SESSION_ID, USER_ID);
-        doNothing().when(chatMemoryProvider).clear(SESSION_ID);
+        doNothing().when(chatBizService).deleteSession(SESSION_ID, USER_ID);
 
         mockMvc.perform(delete("/api/v1/sessions/{sessionId}", SESSION_ID)
                         .header("X-User-Id", USER_ID))
@@ -215,10 +171,9 @@ class ChatControllerTest {
     @Test
     @DisplayName("getMessages: 查询消息历史成功")
     void getMessages_shouldReturnMessageList() throws Exception {
-        when(sessionService.getSession(SESSION_ID, USER_ID)).thenReturn(createSession());
-        when(messageService.getMessageHistory(SESSION_ID)).thenReturn(List.of(
-                createMessage("user", "你好"),
-                createMessage("assistant", "你好！有什么可以帮您的？")
+        when(chatBizService.getMessages(SESSION_ID, USER_ID)).thenReturn(List.of(
+                createMessageVO("user", "你好"),
+                createMessageVO("assistant", "你好！有什么可以帮您的？")
         ));
 
         mockMvc.perform(get("/api/v1/sessions/{sessionId}/messages", SESSION_ID)
@@ -233,32 +188,14 @@ class ChatControllerTest {
     @Test
     @DisplayName("sendMessage: 发送消息并返回 AI 回复")
     void sendMessage_shouldReturnAiMessage() throws Exception {
-        AgentConfigDTO agent = createAgentConfig();
-        when(sessionService.getSession(SESSION_ID, USER_ID)).thenReturn(createSession());
-        when(agentFeignClient.getAgent(AGENT_ID, USER_ID)).thenReturn(Result.success(agent));
-        when(knowledgeFeignClient.ragQuery(anyString(), any(KnowledgeFeignClient.RAGQueryRequest.class), eq(USER_ID)))
-                .thenReturn(Result.success(null));
-
-        ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
-        when(llmService.createChatModel(anyString(), anyString(), anyDouble(), anyInt())).thenReturn(chatModel);
-
-        when(chatLLMService.chat(anyString(), anyString(), anyString(), any(), anyString(), anyInt(), any(ChatModel.class), anyLong()))
-                .thenReturn("AI 回复内容");
-
-        when(messageService.saveUserMessage(SESSION_ID, "你好")).thenReturn(createMessage("user", "你好"));
-
-        ChatMessage aiMessage = createMessage("assistant", "AI 回复内容");
-        aiMessage.setModelName(agent.getModelName());
-        when(messageService.saveAssistantMessage(SESSION_ID, "AI 回复内容", agent.getModelName(), null))
+        ChatMessageVO aiMessage = createMessageVO("assistant", "AI 回复内容");
+        aiMessage.setModelName("gpt-4o-mini");
+        when(chatBizService.sendMessage(eq(SESSION_ID), any(SendMessageRequest.class), eq(USER_ID)))
                 .thenReturn(aiMessage);
-        doNothing().when(sessionService).updateMessageCount(SESSION_ID);
 
         SendMessageRequest request = new SendMessageRequest();
         request.setContent("你好");
         request.setAgentId(AGENT_ID);
-        request.setKbId(KB_ID);
-        request.setKbCode("test-kb");
-        request.setSessionId(SESSION_ID);
 
         mockMvc.perform(post("/api/v1/sessions/{sessionId}/messages", SESSION_ID)
                         .header("X-User-Id", USER_ID)
@@ -274,16 +211,7 @@ class ChatControllerTest {
     @Test
     @DisplayName("streamChat: 流式对话返回 SSE 数据")
     void streamChat_shouldReturnSseStream() throws Exception {
-        AgentConfigDTO agent = createAgentConfig();
-        when(sessionService.getSession(SESSION_ID, USER_ID)).thenReturn(createSession());
-        when(agentFeignClient.getAgent(AGENT_ID, USER_ID)).thenReturn(Result.success(agent));
-
-        StreamingChatModel streamingModel = org.mockito.Mockito.mock(StreamingChatModel.class);
-        when(llmService.createStreamingModel(anyString(), anyString(), anyDouble(), anyInt())).thenReturn(streamingModel);
-
-        when(messageService.saveUserMessage(SESSION_ID, "你好")).thenReturn(createMessage("user", "你好"));
-        when(chatLLMService.streamChat(anyString(), anyString(), anyString(), any(), anyString(), anyInt(),
-                any(StreamingChatModel.class), any(ChatModel.class), anyString(), anyLong()))
+        when(chatBizService.streamChat(eq(SESSION_ID), eq("你好"), eq(AGENT_ID), isNull(), isNull(), isNull(), eq(USER_ID)))
                 .thenReturn(Flux.just(SSEMessage.start("msg-1"), SSEMessage.content("你好")));
 
         MvcResult mvcResult = mockMvc.perform(get("/api/v1/sessions/{sessionId}/stream", SESSION_ID)
@@ -306,8 +234,8 @@ class ChatControllerTest {
     @Test
     @DisplayName("streamChat: 会话不存在时返回错误 SSE")
     void streamChat_shouldReturnErrorWhenSessionNotFound() throws Exception {
-        when(sessionService.getSession(SESSION_ID, USER_ID))
-                .thenThrow(new BusinessException(ErrorCode.NOT_FOUND.getCode(), "会话不存在"));
+        when(chatBizService.streamChat(eq(SESSION_ID), eq("你好"), eq(AGENT_ID), isNull(), isNull(), isNull(), eq(USER_ID)))
+                .thenReturn(Flux.just(SSEMessage.error("会话不存在")));
 
         MvcResult mvcResult = mockMvc.perform(get("/api/v1/sessions/{sessionId}/stream", SESSION_ID)
                         .header("X-User-Id", USER_ID)

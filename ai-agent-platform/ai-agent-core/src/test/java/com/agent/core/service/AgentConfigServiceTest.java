@@ -33,7 +33,7 @@ class AgentConfigServiceTest {
     private AgentConfigMapper agentConfigMapper;
 
     @InjectMocks
-    private AgentConfigService agentConfigService;
+    private AgentConfigServiceImpl agentConfigService;
 
     private CreateAgentRequest createRequest;
 

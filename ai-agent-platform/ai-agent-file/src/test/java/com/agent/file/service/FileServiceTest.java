@@ -3,6 +3,8 @@ package com.agent.file.service;
 import com.agent.common.exception.BusinessException;
 import com.agent.common.exception.ErrorCode;
 import com.agent.file.config.MinioConfig;
+import com.agent.file.vo.FileDownloadVO;
+import com.agent.file.vo.FileInfoVO;
 import io.minio.*;
 import io.minio.messages.Item;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +20,9 @@ import org.mockito.quality.Strictness;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +46,7 @@ class FileServiceTest {
     private MinioConfig minioConfig;
 
     @InjectMocks
-    private FileService fileService;
+    private FileServiceImpl fileService;
 
     private static final String BUCKET_NAME = "ai-agent-bucket";
 
@@ -252,5 +256,91 @@ class FileServiceTest {
     @Test
     void detectContentType_shouldReturnDefaultType_whenObjectNameIsNull() {
         assertThat(fileService.detectContentType(null)).isEqualTo("application/octet-stream");
+    }
+
+    @Test
+    void listFileInfos_shouldReturnVOListWithUrl() throws Exception {
+        stubBucketExists();
+        Item item = mock(Item.class);
+        given(item.objectName()).willReturn("a.txt");
+        Result<Item> result = new Result<>(item);
+        given(minioClient.listObjects(any(ListObjectsArgs.class))).willReturn(List.of(result));
+
+        StatObjectResponse stat = mock(StatObjectResponse.class);
+        given(stat.object()).willReturn("a.txt");
+        given(stat.size()).willReturn(100L);
+        given(stat.contentType()).willReturn("text/plain");
+        given(stat.lastModified()).willReturn(ZonedDateTime.now());
+        given(minioClient.statObject(any(StatObjectArgs.class))).willReturn(stat);
+        given(minioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class))).willReturn("http://minio/a.txt");
+
+        List<FileInfoVO> list = fileService.listFileInfos();
+
+        assertThat(list).hasSize(1);
+        FileInfoVO vo = list.get(0);
+        assertThat(vo.getObjectName()).isEqualTo("a.txt");
+        assertThat(vo.getSize()).isEqualTo(100L);
+        assertThat(vo.getContentType()).isEqualTo("text/plain");
+        assertThat(vo.getUrl()).isEqualTo("http://minio/a.txt");
+    }
+
+    @Test
+    void listFileInfos_shouldSkipObject_whenInfoQueryFails() throws Exception {
+        stubBucketExists();
+        Item item = mock(Item.class);
+        given(item.objectName()).willReturn("broken.txt");
+        Result<Item> result = new Result<>(item);
+        given(minioClient.listObjects(any(ListObjectsArgs.class))).willReturn(List.of(result));
+        given(minioClient.statObject(any(StatObjectArgs.class))).willThrow(new RuntimeException("stat fail"));
+
+        List<FileInfoVO> list = fileService.listFileInfos();
+
+        assertThat(list).isEmpty();
+    }
+
+    @Test
+    void downloadFile_shouldReturnVO_whenObjectExists() throws Exception {
+        stubBucketExists();
+        StatObjectResponse stat = mock(StatObjectResponse.class);
+        given(stat.object()).willReturn("object.txt");
+        given(stat.size()).willReturn(5L);
+        given(stat.contentType()).willReturn("text/plain");
+        given(stat.lastModified()).willReturn(ZonedDateTime.now());
+        given(minioClient.statObject(any(StatObjectArgs.class))).willReturn(stat);
+
+        byte[] content = "hello".getBytes(StandardCharsets.UTF_8);
+        GetObjectResponse fakeResponse = new GetObjectResponse(
+                null, BUCKET_NAME, "default", "object.txt", new ByteArrayInputStream(content));
+        given(minioClient.getObject(any(GetObjectArgs.class))).willReturn(fakeResponse);
+
+        FileDownloadVO vo = fileService.downloadFile("object.txt");
+
+        assertThat(vo.getFileName()).isEqualTo("object.txt");
+        assertThat(vo.getContentType()).isEqualTo("text/plain");
+        assertThat(vo.getSize()).isEqualTo(5L);
+        assertThat(vo.getData()).isEqualTo(content);
+    }
+
+    @Test
+    void downloadFile_shouldThrowParamError_whenObjectNameBlank() {
+        assertThatThrownBy(() -> fileService.downloadFile("  "))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> {
+                    BusinessException be = (BusinessException) e;
+                    assertThat(be.getCode()).isEqualTo(ErrorCode.PARAM_ERROR.getCode());
+                });
+    }
+
+    @Test
+    void downloadFile_shouldThrowNotFound_whenObjectMissing() throws Exception {
+        stubBucketExists();
+        given(minioClient.statObject(any(StatObjectArgs.class))).willThrow(new RuntimeException("not found"));
+
+        assertThatThrownBy(() -> fileService.downloadFile("missing.txt"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> {
+                    BusinessException be = (BusinessException) e;
+                    assertThat(be.getCode()).isEqualTo(ErrorCode.NOT_FOUND.getCode());
+                });
     }
 }

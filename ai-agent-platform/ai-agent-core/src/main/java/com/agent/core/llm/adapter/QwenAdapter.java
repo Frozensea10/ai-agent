@@ -13,9 +13,7 @@ import static com.agent.core.llm.adapter.LlmAdapterConstants.*;
  * 通义千问对话模型适配器。
  *
  * <p>通义千问兼容 OpenAI 接口格式，通过 DashScope 兼容模式端点
- * {@code https://dashscope.aliyuncs.com/compatible-mode/v1} 调用，
- * 无需依赖 langchain4j-community-dashscope 和 dashscope-sdk，
- * 减少依赖冲突。
+ * {@code https://dashscope.aliyuncs.com/compatible-mode/v1} 调用。
  */
 public class QwenAdapter implements ModelAdapter {
 

@@ -55,7 +55,7 @@ class ChatLLMServiceTest {
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
-    private ChatLLMService chatLLMService;
+    private ChatLLMServiceImpl chatLLMService;
 
     @Mock
     private ChatModel chatModel;
@@ -117,7 +117,7 @@ class ChatLLMServiceTest {
         SystemMessage systemMessage = (SystemMessage) captor.getValue().get(0);
         assertTrue(systemMessage.text().contains(SYSTEM_PROMPT));
         assertTrue(systemMessage.text().contains(ragContext));
-        assertTrue(systemMessage.text().contains("请基于以上参考信息回答用户问题"));
+        assertTrue(systemMessage.text().contains("以下是与用户问题相关的参考信息"));
     }
 
     @Test
@@ -141,8 +141,11 @@ class ChatLLMServiceTest {
     @DisplayName("chat: 模型返回包含工具调用时调用 MCP 并替换结果")
     void chat_withToolCall_shouldExecuteToolAndReplace() throws Exception {
         String toolCallContent = "调用工具 <tool_call>{\"name\":\"http_request\",\"arguments\":{\"url\":\"https://example.com\"}}</tool_call>";
+        String finalAnswer = "根据工具返回结果，答案是 OK";
         when(chatMemoryProvider.getMessages(SESSION_ID, MEMORY_TYPE, MAX_MESSAGES)).thenReturn(createHistory());
-        when(chatModel.chat(anyList())).thenReturn(createChatResponse(toolCallContent));
+        when(chatModel.chat(anyList()))
+                .thenReturn(createChatResponse(toolCallContent))
+                .thenReturn(createChatResponse(finalAnswer));
         doNothing().when(chatMemoryProvider).addUserMessage(SESSION_ID, MEMORY_TYPE, MAX_MESSAGES, USER_MESSAGE);
 
         ToolExecuteResult toolResult = new ToolExecuteResult();
@@ -153,8 +156,7 @@ class ChatLLMServiceTest {
 
         String result = chatLLMService.chat(SESSION_ID, USER_MESSAGE, SYSTEM_PROMPT, null, MEMORY_TYPE, MAX_MESSAGES, chatModel, 1L);
 
-        assertTrue(result.contains("[工具执行结果]"));
-        assertTrue(result.contains("OK"));
+        assertEquals(finalAnswer, result);
         verify(mcpFeignClient).executeTool(eq("http_request"), anyMap(), eq(1L));
     }
 

@@ -25,7 +25,7 @@ class MessageServiceTest {
     private ChatMessageMapper messageMapper;
 
     @InjectMocks
-    private MessageService messageService;
+    private MessageServiceImpl messageService;
 
     @Test
     @DisplayName("保存用户消息成功")

@@ -1,91 +1,58 @@
 package com.agent.knowledge.rag;
 
-import com.agent.common.exception.BusinessException;
-import com.agent.common.exception.ErrorCode;
-import com.agent.knowledge.embedding.EmbeddingService;
-import com.agent.knowledge.vector.QdrantService;
-import io.qdrant.client.grpc.Points;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
-public class RAGService {
+public interface RAGService {
 
-    private final QdrantService qdrantService;
-    private final EmbeddingService embeddingService;
+    /**
+     * 检索知识库相关文档片段：校验知识库权限后执行向量检索。
+     *
+     * @param kbCode 知识库编码
+     * @param query 查询文本
+     * @param topK 返回的最大结果数，为 null 时使用默认值
+     * @param userId 当前用户 ID（用于权限校验）
+     * @return 过滤后的检索结果列表
+     */
+    List<RetrievalResult> retrieve(String kbCode, String query, Integer topK, Long userId);
 
-    @Value("${rag.similarity-threshold:0.5}")
-    private float similarityThreshold;
+    /**
+     * RAG 查询编排：检索相关片段、构建上下文与增强提示词，并拼装查询结果。
+     *
+     * @param kbCode 知识库编码
+     * @param query 查询文本
+     * @param topK 返回的最大结果数，为 null 时使用默认值
+     * @param systemPrompt 系统提示词（可选）
+     * @param userId 当前用户 ID（用于权限校验）
+     * @return RAG 查询结果，包含增强提示词、参考上下文与检索引用
+     */
+    RAGQueryResult ragQuery(String kbCode, String query, Integer topK, String systemPrompt, Long userId);
 
-    public List<RetrievalResult> retrieve(String kbCode, String query, int topK, String provider, String modelName) {
-        log.info("RAG 检索开始: kbCode={}, query={}, provider={}, modelName={}, topK={}, threshold={}",
-                kbCode, query, provider, modelName, topK, similarityThreshold);
-        List<Float> queryVector = embeddingService.embed(query, provider, modelName);
-        try {
-            List<Points.ScoredPoint> results = qdrantService.search(kbCode, queryVector, topK);
-            log.info("RAG 向量检索原始结果: kbCode={}, 返回points数={}", kbCode, results.size());
-            for (Points.ScoredPoint point : results) {
-                log.info("RAG 原始point: id={}, score={}, hasContent={}, hasDocId={}",
-                        point.getId().getUuid(),
-                        point.getScore(),
-                        point.getPayloadMap().containsKey("content"),
-                        point.getPayloadMap().containsKey("doc_id"));
-            }
-            List<RetrievalResult> filtered = results.stream()
-                    .filter(point -> point.getScore() >= similarityThreshold)
-                    .filter(point -> point.getPayloadMap().get("content") != null
-                            && point.getPayloadMap().get("doc_id") != null)
-                    .map(point -> new RetrievalResult(
-                            point.getId().getUuid(),
-                            point.getPayloadMap().get("content").getStringValue(),
-                            point.getPayloadMap().get("doc_id").getStringValue(),
-                            point.getScore()
-                    ))
-                    .collect(Collectors.toList());
-            log.info("RAG 检索过滤后结果: kbCode={}, 召回数={}", kbCode, filtered.size());
-            return filtered;
-        } catch (Exception e) {
-            log.error("RAG 检索失败: kbCode={}, queryLength={}", kbCode, query == null ? 0 : query.length(), e);
-            throw new BusinessException(ErrorCode.VECTOR_SERVICE_ERROR.getCode(), "检索失败: " + e.getMessage());
-        }
-    }
+    List<RetrievalResult> retrieve(String kbCode, String query, int topK, String provider, String modelName);
 
-    public String buildContext(List<RetrievalResult> results) {
-        StringBuilder context = new StringBuilder();
-        context.append("以下是与用户问题相关的参考信息:\n\n");
-        for (int i = 0; i < results.size(); i++) {
-            RetrievalResult result = results.get(i);
-            context.append("[参考 ").append(i + 1).append("] (相关度: ")
-                    .append(String.format("%.2f", result.getScore())).append(")\n");
-            context.append(result.getContent()).append("\n\n");
-        }
-        return context.toString();
-    }
+    /**
+     * 将检索结果拼接为带序号与相关度标注的参考上下文文本。
+     *
+     * @param results 检索结果列表
+     * @return 供大模型参考的上下文文本
+     */
+    String buildContext(List<RetrievalResult> results);
 
-    public String buildPrompt(String userQuery, String context, String systemPrompt) {
-        StringBuilder prompt = new StringBuilder();
-        if (systemPrompt != null && !systemPrompt.isBlank()) {
-            prompt.append(systemPrompt).append("\n\n");
-        }
-        prompt.append(context);
-        prompt.append("用户问题: ").append(userQuery).append("\n\n");
-        prompt.append("请基于以上参考信息回答用户问题。如果参考信息不足以回答问题，请明确说明。");
-        return prompt.toString();
-    }
+    String buildPrompt(String userQuery, String context, String systemPrompt);
 
+    /**
+     * 单条检索结果，包含向量点 ID、分块内容、所属文档 ID 及相似度得分。
+     */
     @Data
-    public static class RetrievalResult {
+    class RetrievalResult {
+        /** 向量点 ID（分块对应的 UUID） */
         private final String chunkId;
+        /** 分块文本内容 */
         private final String content;
+        /** 所属文档 ID */
         private final String docId;
+        /** 相似度得分（余弦相似度） */
         private final float score;
 
         public RetrievalResult(String chunkId, String content, String docId, float score) {
@@ -94,5 +61,18 @@ public class RAGService {
             this.docId = docId;
             this.score = score;
         }
+    }
+
+    /**
+     * RAG 查询结果，包含增强提示词、参考上下文与检索引用。
+     */
+    @Data
+    class RAGQueryResult {
+        /** 构建的完整增强提示词 */
+        private String prompt;
+        /** 检索得到的参考上下文文本 */
+        private String context;
+        /** 检索引用列表 */
+        private List<RetrievalResult> references;
     }
 }

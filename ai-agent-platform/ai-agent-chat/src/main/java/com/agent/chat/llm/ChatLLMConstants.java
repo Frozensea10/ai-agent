@@ -19,4 +19,7 @@ public final class ChatLLMConstants {
 
     public static final String PLAIN_TOOL_CALL_REGEX =
             "\\{\\s*\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"arguments\"\\s*:\\s*(\\{[\\s\\S]*?\\})\\s*\\}";
+
+    /** 流式对话失败错误消息前缀。 */
+    public static final String STREAM_CHAT_ERROR_PREFIX = "流式对话失败: ";
 }
